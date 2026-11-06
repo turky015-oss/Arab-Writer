@@ -18,7 +18,10 @@ public enum TextDiff {
         if n * m > 2_500_000 {
             // نص طويل جداً: مقارنة تقريبية بدل جدول ضخم يستهلك الذاكرة
             let sa = Set(wa), sb = Set(wb)
-            let sim = Int((2.0 * Double(sa.intersection(sb).count) / Double(max(sa.count + sb.count, 1)) * 100).rounded())
+            let common: Double = Double(sa.intersection(sb).count)
+            let total: Double = Double(max(sa.count + sb.count, 1))
+            let ratio: Double = 2.0 * common / total
+            let sim = Int((ratio * 100).rounded())
             return ([DiffChange(op: .replace, before: "النص طويل، والمقارنة كلمة بكلمة متاحة للنصوص الأقصر", after: "")], sim)
         }
         var dp = Array(repeating: Array(repeating: 0, count: m + 1), count: n + 1)
