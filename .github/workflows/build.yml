@@ -28,7 +28,14 @@ jobs:
           swift --version
 
       - name: Tests
-        run: swift test
+        run: |
+          set +e
+          swift test 2>&1 | tee test.log
+          code=${PIPESTATUS[0]}
+          if [ $code -ne 0 ]; then
+            grep -E "error:|failed|Fatal|XCTAssert|Crash|signal" test.log | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+          fi
+          exit $code
 
       - name: Build app
         run: |
