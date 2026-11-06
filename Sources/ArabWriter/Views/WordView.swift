@@ -83,7 +83,7 @@ struct WordView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 10)], spacing: 10) {
                     ActionTile(title: "تدقيق آمن", symbol: "checkmark.seal.fill", tint: .awGreen) { safeProof() }
                     ActionTile(title: "صياغة ذكية", symbol: "wand.and.stars", tint: .awPurple,
-                               disabled: !settings.hasKey || working) { aiRewrite() }
+                               disabled: !settings.aiAvailable || working) { aiRewrite() }
                     ActionTile(title: "اتجاه عربي", symbol: "text.alignright", tint: .awBlue) {
                         DocxService.forceRTL(doc); bump(); toast = Toast(text: "كل الفقرات صارت من اليمين")
                     }

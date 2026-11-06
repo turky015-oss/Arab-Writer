@@ -97,12 +97,12 @@ struct VideoView: View {
                     }
                     .buttonStyle(.glassProminent).controlSize(.extraLarge).tint(tint)
                     .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(working || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !settings.hasKey)
+                    .disabled(working || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !settings.aiAvailable)
                     .hoverTilt(radius: 30, tilt: 6, glow: .white, sound: false)
                 }
 
-                if !settings.hasKey {
-                    Label("الفيديو يحتاج مفتاح Claude. أضفه من الإعدادات (⌘ ,)", systemImage: "key")
+                if !settings.aiAvailable {
+                    Label("الفيديو يحتاج المحرّك الذكي. أضف مفتاح Claude من الإعدادات (⌘ ,)", systemImage: "key")
                         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                         .glassEffect(.regular.tint(Color.awOrange.opacity(0.15)), in: .rect(cornerRadius: 16))
                 }

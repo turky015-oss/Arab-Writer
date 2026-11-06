@@ -33,11 +33,11 @@ final class ServiceProvider: NSObject {
         guard let text = pboard.string(forType: .string), !text.isEmpty else { return }
         let settings = AppSettings.shared
         guard let client = try? settings.client() else {
-            error.pointee = "أضف مفتاح Claude من إعدادات Arab Writer أولاً."
+            error.pointee = "المحرّك الذكي غير متاح. أضف مفتاح Claude من إعدادات Arab Writer."
             return
         }
         let en = settings.englishOnOwnLine
-        let system = SkillPrompt.writing
+        let system = SkillPrompt.pick(.writing, client)
         let user = WritingEngine.instruction(
             for: WriteRequest(text: text, mode: .rewrite, register: .keep, platform: .none, words: nil), en: en)
 
@@ -49,7 +49,7 @@ final class ServiceProvider: NSObject {
             catch { result.value = .failure(error) }
             done.signal()
         }
-        guard done.wait(timeout: .now() + 55) == .success, let r = result.value else {
+        guard done.wait(timeout: .now() + 58) == .success, let r = result.value else {
             error.pointee = "تأخر الرد. جرّب نصاً أقصر أو افتحه في Arab Writer."
             return
         }

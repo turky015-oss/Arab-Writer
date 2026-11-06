@@ -225,8 +225,8 @@ struct PDFToolsView: View {
                             Button("حذف", systemImage: "xmark") { logo = nil }.labelStyle(.iconOnly).buttonStyle(.glass)
                         }
                     }
-                    if !settings.hasKey {
-                        Label("يحتاج مفتاح Claude", systemImage: "key").font(.caption).foregroundStyle(Color.awOrange)
+                    if !settings.aiAvailable {
+                        Label("يحتاج المحرّك الذكي", systemImage: "key").font(.caption).foregroundStyle(Color.awOrange)
                     }
                 default: EmptyView()
                 }
@@ -240,7 +240,7 @@ struct PDFToolsView: View {
                     .font(.headline)
                 }
                 .buttonStyle(.glassProminent).controlSize(.large).tint(tool.tint)
-                .disabled(working || files.isEmpty || (tool == .summarize && !settings.hasKey))
+                .disabled(working || files.isEmpty || (tool == .summarize && !settings.aiAvailable))
 
                 if let ocrProgress {
                     Label(ocrProgress, systemImage: "text.viewfinder")

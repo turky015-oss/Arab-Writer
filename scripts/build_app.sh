@@ -1,6 +1,7 @@
 #!/bin/bash
-# يبني Arab Writer.app من الحزمة ويجهز ملف zip و dmg للنشر.
+# يبني Arab Writer.app (معالجات أبل) مع النموذج الداخلي، ويجهز zip و dmg.
 # الاستعمال: scripts/build_app.sh [version]
+# النموذج يُنزَّل مسبقاً إلى مجلد Model في جذر المشروع (scripts/fetch_model.sh).
 set -euo pipefail
 
 VERSION="${1:-1.0.0}"
@@ -8,19 +9,41 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/dist"
 APP="$OUT/Arab Writer.app"
 RES="$ROOT/Sources/ArabWriter/Resources"
+DD="$ROOT/.build/xcode"
 
 cd "$ROOT"
 rm -rf "$OUT" && mkdir -p "$OUT"
 
-echo "› البناء (Apple Silicon + Intel)"
-swift build -c release --arch arm64 --arch x86_64
-BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/ArabWriter"
+echo "› البناء (Xcode، حتى تُبنى شيفرات الرسوميات الخاصة بـ MLX)"
+xcodebuild -scheme ArabWriter -configuration Release \
+  -destination 'platform=macOS,arch=arm64' -derivedDataPath "$DD" \
+  -skipPackagePluginValidation -skipMacroValidation \
+  ONLY_ACTIVE_ARCH=YES build > "$OUT/xcodebuild.log" 2>&1 || {
+    grep -E "error:" "$OUT/xcodebuild.log" | sort -u | head -30 | while IFS= read -r l; do echo "::error::$l"; done
+    tail -n 30 "$OUT/xcodebuild.log"; exit 1; }
+  tail -n 5 "$OUT/xcodebuild.log"
+PROD="$DD/Build/Products/Release"
+test -f "$PROD/ArabWriter"
 
 echo "› تجميع التطبيق"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/ArabWriter"
+cp "$PROD/ArabWriter" "$APP/Contents/MacOS/ArabWriter"
+for b in "$PROD"/*.bundle; do [ -e "$b" ] && cp -R "$b" "$APP/Contents/Resources/"; done
+METAL=$(find "$PROD" "$DD" -name "*.metallib" -print -quit 2>/dev/null || true)
+if [ -n "$METAL" ]; then
+  cp "$METAL" "$APP/Contents/MacOS/mlx.metallib"
+  cp "$METAL" "$APP/Contents/Resources/default.metallib"
+  cp "$METAL" "$APP/Contents/Resources/mlx.metallib"
+  echo "  metallib: $METAL"
+else
+  echo "::warning::ما لقيت metallib، النموذج الداخلي ممكن ما يشتغل"
+fi
 cp -R "$RES/Skill" "$APP/Contents/Resources/Skill"
 cp "$RES"/Amiri-*.ttf "$RES/OFL.txt" "$APP/Contents/Resources/"
+if [ -f "$ROOT/Model/config.json" ]; then
+  cp -R "$ROOT/Model" "$APP/Contents/Resources/Model"
+  echo "  النموذج: $(du -sh "$APP/Contents/Resources/Model" | cut -f1)"
+fi
 sed "s/__VERSION__/$VERSION/g" "$ROOT/scripts/Info.plist" > "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
@@ -37,20 +60,19 @@ rm -rf "$SET"
 
 echo "› التوقيع"
 if [[ -n "${SIGN_IDENTITY:-}" ]]; then
-  codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
+  codesign --force --deep --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP"
 else
-  codesign --force --sign - "$APP"   # توقيع محلي (بدون حساب مطوّر)
+  codesign --force --deep --sign - "$APP"
 fi
 codesign --verify --verbose "$APP"
 
-echo "› الحزم"
-ditto -c -k --keepParent "$APP" "$OUT/Arab-Writer-$VERSION.zip"
+echo "› الحزمة"
 STAGE="$OUT/dmg"
 mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname "Arab Writer" -srcfolder "$STAGE" -ov -format UDZO "$OUT/Arab-Writer-$VERSION.dmg" >/dev/null
+hdiutil create -volname "Arab Writer" -srcfolder "$STAGE" -ov -format ULFO "$OUT/Arab-Writer-$VERSION.dmg" >/dev/null
 rm -rf "$STAGE"
 
-echo "✓ جاهز: $OUT"
+echo "✓ جاهز"
 ls -la "$OUT"

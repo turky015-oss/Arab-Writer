@@ -4,3 +4,4 @@ dist/
 *.xcodeproj/
 xcuserdata/
 .DS_Store
+Model/

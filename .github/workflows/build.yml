@@ -37,37 +37,36 @@ jobs:
           fi
           exit $code
 
+      - name: Model cache
+        uses: actions/cache@v4
+        with:
+          path: Model
+          key: mlx-qwen2.5-3b-instruct-4bit-v1
+
+      - name: Fetch model
+        run: scripts/fetch_model.sh
+
       - name: Build app
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          [[ "$GITHUB_REF_TYPE" == "tag" ]] || VERSION="0.0.${GITHUB_RUN_NUMBER}"
-          chmod +x scripts/build_app.sh
+          [[ "$GITHUB_REF_TYPE" == "tag" ]] || VERSION="0.2.${GITHUB_RUN_NUMBER}"
           scripts/build_app.sh "$VERSION"
+          ls -la dist
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Arab-Writer-mac
-          path: |
-            dist/*.zip
-            dist/*.dmg
-
-      - name: Test build branch
+      - name: Test release
         if: github.ref == 'refs/heads/mac-app'
-        run: |
-          mkdir -p /tmp/out && cp dist/*.dmg /tmp/out/Arab-Writer.dmg
-          cd /tmp/out
-          git init -q -b mac-build
-          git config user.name "github-actions"
-          git config user.email "github-actions@users.noreply.github.com"
-          git add Arab-Writer.dmg
-          git commit -qm "test build ${GITHUB_SHA::7}"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" mac-build
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test-mac
+          name: "نسخة تجربة · ماك"
+          prerelease: true
+          make_latest: false
+          body: "نسخة تجربة للماك (معالجات أبل) مع النموذج الداخلي. ليست إصداراً نهائياً."
+          files: dist/*.dmg
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/*.zip
-            dist/*.dmg
+          files: dist/*.dmg
           generate_release_notes: true

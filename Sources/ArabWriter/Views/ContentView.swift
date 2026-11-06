@@ -176,13 +176,13 @@ struct ContentView: View {
         Button { openSettings() } label: {
             HStack(spacing: 8) {
                 Circle()
-                    .fill(settings.hasKey ? Color.awGreen : Color.awOrange)
+                    .fill(settings.aiAvailable ? Color.awGreen : Color.awOrange)
                     .frame(width: 8, height: 8)
-                    .shadow(color: (settings.hasKey ? Color.awGreen : Color.awOrange).opacity(0.8), radius: 4)
+                    .shadow(color: (settings.aiAvailable ? Color.awGreen : Color.awOrange).opacity(0.8), radius: 4)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(settings.hasKey ? "الذكاء مفعّل" : "وضع بدون إنترنت")
+                    Text(settings.usingLocal ? "داخلي · بدون إنترنت" : (settings.hasKey ? "Claude متصل" : "الأدوات فقط"))
                         .font(.caption.weight(.semibold))
-                    Text(settings.hasKey ? "Claude متصل بمفتاحك" : "أضف مفتاحك للمزايا الذكية")
+                    Text(settings.usingLocal ? "كل شيء يبقى على جهازك" : (settings.hasKey ? "بمفتاحك الخاص" : "أضف مفتاحاً للمزايا الذكية"))
                         .font(.caption2).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)

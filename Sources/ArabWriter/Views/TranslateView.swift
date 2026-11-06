@@ -81,7 +81,7 @@ struct TranslateView: View {
                         .buttonStyle(.glassProminent).tint(tint)
                         .clipShape(.circle)
                         .keyboardShortcut(.return, modifiers: .command)
-                        .disabled(working || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !settings.hasKey)
+                        .disabled(working || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !settings.aiAvailable)
                         .hoverTilt(radius: 27, tilt: 12, glow: .white, sound: false)
                         Button {
                             if let r = result { input = r.text; result = nil; SoundFX.play(.tap) }
@@ -127,8 +127,8 @@ struct TranslateView: View {
                     }
                 }
 
-                if !settings.hasKey {
-                    Label("الترجمة تحتاج مفتاح Claude. أضفه من الإعدادات (⌘ ,)", systemImage: "key")
+                if !settings.aiAvailable {
+                    Label("الترجمة تحتاج المحرّك الذكي. أضف مفتاح Claude من الإعدادات (⌘ ,)", systemImage: "key")
                         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                         .glassEffect(.regular.tint(Color.awOrange.opacity(0.15)), in: .rect(cornerRadius: 16))
                 }

@@ -69,8 +69,8 @@ struct StoryView: View {
                     }
                 }
 
-                if !settings.hasKey {
-                    Label("القصة تحتاج مفتاح Claude. أضفه من الإعدادات (⌘ ,)", systemImage: "key")
+                if !settings.aiAvailable {
+                    Label("القصة تحتاج المحرّك الذكي. أضف مفتاح Claude من الإعدادات (⌘ ,)", systemImage: "key")
                         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
                         .glassEffect(.regular.tint(Color.awOrange.opacity(0.15)), in: .rect(cornerRadius: 16))
                 }

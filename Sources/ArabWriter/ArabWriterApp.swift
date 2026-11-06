@@ -52,6 +52,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         ArabicFont.registerBundled()
         NSApp.servicesProvider = ServiceProvider.shared
+        // تحميل النموذج الداخلي في الخلفية حتى يكون أول طلب أسرع
+        if LocalModel.isAvailable { Task.detached(priority: .utility) { await LocalModel.shared.warmUp() } }
         NSUpdateDynamicServices()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()

@@ -11,7 +11,14 @@ final class AppSettings {
     var model: String
     var englishOnOwnLine: Bool
     var autoRetry: Bool
+    /// "local" = النموذج الداخلي، "claude" = Claude بالمفتاح
+    var engine: String
     private(set) var hasKey: Bool
+
+    /// فيه محرّك ذكي متاح (داخلي أو Claude).
+    var aiAvailable: Bool { LocalModel.isAvailable || hasKey }
+    /// الطلب القادم بيروح للنموذج الداخلي.
+    var usingLocal: Bool { LocalModel.isAvailable && !(engine == "claude" && hasKey) }
 
     static let models: [(id: String, name: String)] = [
         ("claude-sonnet-5-5", "Sonnet 5.5 · متوازن"),
@@ -24,6 +31,7 @@ final class AppSettings {
         model = d.string(forKey: "model") ?? "claude-sonnet-5-5"
         englishOnOwnLine = d.object(forKey: "enLines") as? Bool ?? true
         autoRetry = d.object(forKey: "autoRetry") as? Bool ?? true
+        engine = d.string(forKey: "engine") ?? "local"
         hasKey = Keychain.read() != nil
     }
 
@@ -32,6 +40,7 @@ final class AppSettings {
         d.set(model, forKey: "model")
         d.set(englishOnOwnLine, forKey: "enLines")
         d.set(autoRetry, forKey: "autoRetry")
+        d.set(engine, forKey: "engine")
     }
 
     func setKey(_ key: String) {
@@ -44,9 +53,20 @@ final class AppSettings {
         hasKey = false
     }
 
-    func client() throws -> ClaudeClient {
+    func claude() throws -> ClaudeClient {
         guard let key = Keychain.read() else { throw ClaudeError.noKey }
         return ClaudeClient(apiKey: key, model: model)
+    }
+
+    /// المحرّك المختار: الداخلي افتراضياً، وClaude إذا اختاره المستخدم وعنده مفتاح.
+    func client() throws -> any TextEngine {
+        if usingLocal { return LocalEngine() }
+        if hasKey { return try claude() }
+        #if !arch(arm64)
+        throw LocalModelError.unsupported
+        #else
+        throw LocalModelError.missing
+        #endif
     }
 }
 
@@ -71,6 +91,20 @@ enum SkillPrompt {
     أرجع النص النهائي وحده. لا مقدمة، لا شرح، لا عناوين عن النص، لا علامات اقتباس حوله، لا كتل كود.
     إن احتجت سؤالاً عن تفصيلة ناقصة (حسب قاعدة لا اختلاق)، ضعه بعد النص في سطر أخير يبدأ بـ «سؤال:».
     """
+
+    enum Kind { case writing, story, summary }
+
+    /// التعليمات المناسبة للمحرّك: كاملة لـ Claude، ومختصرة للنموذج الداخلي.
+    static func pick(_ kind: Kind, _ engine: any TextEngine) -> String {
+        switch (kind, engine.isLocal) {
+        case (.writing, true): return LocalPrompt.base
+        case (.story, true): return LocalPrompt.story
+        case (.summary, true): return LocalPrompt.summary
+        case (.writing, false): return writing
+        case (.story, false): return story
+        case (.summary, false): return summary
+        }
+    }
 
     static var writing: String {
         [appRules,
@@ -199,7 +233,10 @@ enum WritingEngine {
         case .saudi: parts.append("السجل: لهجة سعودية طبيعية.")
         case .fusha: parts.append("السجل: فصحى سهلة.")
         }
-        if r.platform != .none { parts.append("المنصة: \(r.platform.rawValue). طبّق قالبها.") }
+        if r.platform != .none {
+            parts.append("المنصة: \(r.platform.rawValue). طبّق قالبها.")
+            if let t = LocalPrompt.platforms[r.platform.rawValue] { parts.append(t) }
+        }
         if let w = r.words { parts.append("قفل الطول: \(w) كلمة بهامش 10%.") }
         parts.append(en ? "كل كلمة إنجليزية في سطر مستقل وحدها." : "اترك الكلمات الإنجليزية في مكانها داخل السطر.")
         return parts.joined(separator: "\n") + "\n\nالنص:\n" + r.text
@@ -212,8 +249,8 @@ enum WritingEngine {
         let source: String? = r.mode == .write ? nil : r.text
         var opts = LintOptions(wordsTarget: r.words, source: source, englishOnOwnLine: en)
 
-        // بدون مفتاح: الإصلاح الآمن والفحص فقط
-        guard settings.hasKey else {
+        // بدون محرّك ذكي: الإصلاح الآمن والفحص فقط
+        guard settings.aiAvailable else {
             let out = ArabicLinter.fix(r.text, englishOnOwnLine: en)
             opts.source = r.text
             let d = TextDiff.compare(r.text, out)
@@ -222,7 +259,7 @@ enum WritingEngine {
         }
 
         let client = try settings.client()
-        let system = SkillPrompt.writing
+        let system = SkillPrompt.pick(.writing, client)
         let user = instruction(for: r, en: en)
         let raw: String
         if let onPartial {
@@ -274,9 +311,9 @@ enum WritingEngine {
         """
         let raw: String
         if let onPartial {
-            raw = try await client.stream(system: SkillPrompt.story, user: ask) { onPartial($0) }
+            raw = try await client.stream(system: SkillPrompt.pick(.story, client), user: ask) { onPartial($0) }
         } else {
-            raw = try await client.complete(system: SkillPrompt.story, user: ask)
+            raw = try await client.complete(system: SkillPrompt.pick(.story, client), user: ask)
         }
         let (draft, q) = splitQuestion(raw)
         let out = ArabicLinter.fix(draft, englishOnOwnLine: en)
@@ -298,7 +335,7 @@ enum WritingEngine {
         المستند:
         \(clipped)
         """
-        let raw = try await client.complete(system: SkillPrompt.summary, user: ask, maxTokens: 4096)
+        let raw = try await client.complete(system: SkillPrompt.pick(.summary, client), user: ask, maxTokens: 4096)
         return ArabicLinter.fix(splitQuestion(raw).0, englishOnOwnLine: en)
     }
 }
@@ -373,9 +410,9 @@ extension WritingEngine {
         }
         let raw: String
         if let onPartial {
-            raw = try await client.stream(system: SkillPrompt.writing, user: ask) { onPartial($0) }
+            raw = try await client.stream(system: SkillPrompt.pick(.writing, client), user: ask) { onPartial($0) }
         } else {
-            raw = try await client.complete(system: SkillPrompt.writing, user: ask)
+            raw = try await client.complete(system: SkillPrompt.pick(.writing, client), user: ask)
         }
         let draft = splitQuestion(raw).0
         if dir == .toArabic {
@@ -481,9 +518,9 @@ extension WritingEngine {
         """
         let raw: String
         if let onPartial {
-            raw = try await client.stream(system: SkillPrompt.writing, user: ask, maxTokens: 6000) { onPartial($0) }
+            raw = try await client.stream(system: SkillPrompt.pick(.writing, client), user: ask, maxTokens: 6000) { onPartial($0) }
         } else {
-            raw = try await client.complete(system: SkillPrompt.writing, user: ask, maxTokens: 6000)
+            raw = try await client.complete(system: SkillPrompt.pick(.writing, client), user: ask, maxTokens: 6000)
         }
         guard let a = raw.firstIndex(of: "{"), let b = raw.lastIndex(of: "}"),
               let data = String(raw[a...b]).data(using: .utf8),

@@ -8,6 +8,9 @@ let package = Package(
     products: [
         .executable(name: "ArabWriter", targets: ["ArabWriter"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/ml-explore/mlx-swift-examples", exact: "2.25.8"),
+    ],
     targets: [
         .target(
             name: "ArabWriterCore",
@@ -15,7 +18,11 @@ let package = Package(
         ),
         .executableTarget(
             name: "ArabWriter",
-            dependencies: ["ArabWriterCore"],
+            dependencies: [
+                "ArabWriterCore",
+                .product(name: "MLXLLM", package: "mlx-swift-examples"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-examples"),
+            ],
             exclude: ["Resources"],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),

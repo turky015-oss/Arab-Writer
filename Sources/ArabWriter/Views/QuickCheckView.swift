@@ -73,7 +73,7 @@ struct QuickCheckView: View {
                         flash("صُحّح الآمن")
                     }
                     ActionTile(title: working ? "يصيغ…" : "صغ", symbol: "wand.and.stars", tint: .awPurple,
-                               disabled: text.isEmpty || working || !settings.hasKey) { rewrite() }
+                               disabled: text.isEmpty || working || !settings.aiAvailable) { rewrite() }
                     ActionTile(title: "انسخ", symbol: "doc.on.doc.fill", tint: .awIndigo, disabled: text.isEmpty) {
                         Panels.copy(text); SoundFX.play(.copy); flash("نُسخ")
                     }

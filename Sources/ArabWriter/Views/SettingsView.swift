@@ -11,6 +11,26 @@ struct SettingsView: View {
     var body: some View {
         Form {
             SwiftUI.Section {
+                Picker("المحرّك", selection: $settings.engine) {
+                    Text("داخلي على الجهاز · بدون إنترنت").tag("local")
+                    Text("Claude بمفتاحك · أدق").tag("claude")
+                }
+                .pickerStyle(.radioGroup)
+                HStack(spacing: 8) {
+                    Circle().fill(LocalModel.isAvailable ? Color.awGreen : Color.awOrange).frame(width: 9, height: 9)
+                    Text(LocalModel.isAvailable ? "النموذج الداخلي جاهز: Qwen2.5 بثلاثة مليارات معامل" : "النموذج الداخلي غير موجود في هذه النسخة")
+                        .font(.callout)
+                }
+                if settings.engine == "claude" && !settings.hasKey {
+                    Text("ما فيه مفتاح، فالبرنامج يستخدم الداخلي لين تضيف مفتاحك تحت.").font(.caption).foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("المحرّك الذكي")
+            } footer: {
+                Text("الداخلي يشتغل بالكامل على جهازك، ولا يطلع منه أي نص. Claude أدق في الصياغة العربية ويحتاج إنترنت ومفتاحاً.")
+            }
+
+            SwiftUI.Section {
                 HStack {
                     Circle().fill(settings.hasKey ? Color.awGreen : Color.awOrange).frame(width: 9, height: 9)
                     Text(settings.hasKey ? "المفتاح محفوظ في سلسلة المفاتيح" : "لا يوجد مفتاح")
@@ -77,6 +97,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onChange(of: settings.model) { settings.persist() }
+        .onChange(of: settings.engine) { settings.persist() }
         .onChange(of: settings.englishOnOwnLine) { settings.persist() }
         .onChange(of: settings.autoRetry) { settings.persist() }
         .frame(width: 520)

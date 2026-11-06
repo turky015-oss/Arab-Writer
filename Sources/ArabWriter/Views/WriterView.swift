@@ -198,7 +198,7 @@ struct WriterView: View {
                     } else if working {
                         VStack(spacing: 14) {
                             ProgressView()
-                            Text(settings.hasKey ? "يتصل بـ Claude…" : "يصلح ويفحص…").foregroundStyle(.secondary)
+                            Text(settings.aiAvailable ? "يتصل بـ Claude…" : "يصلح ويفحص…").foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else if let r = result {
@@ -269,7 +269,7 @@ struct WriterView: View {
                 live = ""
                 result = try await WritingEngine.run(req) { live = $0 }
                 live = ""
-                if !settings.hasKey { toast = Toast(text: "أصلحتُ الآمن آلياً. أضف مفتاحك لإعادة الصياغة الكاملة") }
+                if !settings.aiAvailable { toast = Toast(text: "أصلحتُ الآمن آلياً. أضف مفتاحك لإعادة الصياغة الكاملة") }
             } catch {
                 toast = Toast(text: error.localizedDescription, isError: true)
             }
