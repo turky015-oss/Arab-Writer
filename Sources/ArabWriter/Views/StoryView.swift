@@ -7,6 +7,7 @@ struct StoryView: View {
     @State private var register: Register = .keep
     @State private var result: WriteResult?
     @State private var working = false
+    @State private var live = ""
     @State private var toast: Toast?
     @State private var settings = AppSettings.shared
 
@@ -74,7 +75,12 @@ struct StoryView: View {
                         .glassEffect(.regular.tint(Color.awOrange.opacity(0.15)), in: .rect(cornerRadius: 16))
                 }
 
-                if result == nil {
+                if working && !live.isEmpty {
+                    GlassPanel(tint: .awPurple) {
+                        LiveText(text: live, tint: .awPurple, fontSize: 18).frame(minHeight: 260)
+                    }
+                    .transition(.opacity)
+                } else if result == nil {
                     FeatureGrid(features: [
                         Feature(symbol: "figure.walk", title: "يبدأ بفعل", caption: "شخص يسوي شيئاً في مكان وزمن محدد"),
                         Feature(symbol: "chart.line.uptrend.xyaxis", title: "تصعيد", caption: "شيء يقاوم البطل ويضيّق خياراته"),
@@ -83,7 +89,7 @@ struct StoryView: View {
                     ], tint: .awPurple, minimum: 200)
                 }
 
-                if let r = result {
+                if let r = result, !working {
                     GlassPanel(tint: .awPurple) {
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {
@@ -119,7 +125,8 @@ struct StoryView: View {
         working = true
         Task {
             defer { working = false }
-            do { result = try await WritingEngine.story(title: title, length: length, register: register) }
+            live = ""
+            do { result = try await WritingEngine.story(title: title, length: length, register: register) { live = $0 } }
             catch { toast = Toast(text: error.localizedDescription, isError: true) }
         }
     }

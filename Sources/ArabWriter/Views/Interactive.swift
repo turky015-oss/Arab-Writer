@@ -346,3 +346,34 @@ struct ActionTile: View {
         .disabled(disabled)
     }
 }
+
+// MARK: - النص الحي
+
+/// نص يُكتب أثناء البث، مع مؤشر كتابة نابض، ويلحق آخر سطر تلقائياً.
+struct LiveText: View {
+    let text: String
+    var tint: Color = .awBlue
+    var fontSize: CGFloat = 16
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles").symbolEffect(.variableColor.iterative, isActive: true)
+                        Text("يكتب الحين…")
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tint)
+                    (Text(text) + Text(" ▍").foregroundStyle(tint))
+                        .font(.system(size: fontSize))
+                        .lineSpacing(fontSize * 0.4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentTransition(.interpolate)
+                    Color.clear.frame(height: 1).id("end")
+                }
+            }
+            .onChange(of: text) { proxy.scrollTo("end", anchor: .bottom) }
+        }
+    }
+}

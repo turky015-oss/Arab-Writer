@@ -21,7 +21,7 @@ struct PDFPreview: NSViewRepresentable {
 }
 
 enum PDFTool: String, CaseIterable, Identifiable {
-    case merge, split, extract, delete, reorder, watermark, number, protect, compress, toImages, fromImages, text, summarize
+    case merge, split, extract, delete, reorder, watermark, number, protect, compress, toImages, fromImages, text, ocr, summarize
     var id: String { rawValue }
 
     var title: String {
@@ -38,6 +38,7 @@ enum PDFTool: String, CaseIterable, Identifiable {
         case .toImages: return "إلى صور"
         case .fromImages: return "صور إلى PDF"
         case .text: return "استخراج النص"
+        case .ocr: return "قراءة ضوئية"
         case .summarize: return "تلخيص ذكي"
         }
     }
@@ -56,11 +57,13 @@ enum PDFTool: String, CaseIterable, Identifiable {
         case .toImages: return "photo.on.rectangle"
         case .fromImages: return "photo.stack"
         case .text: return "text.quote"
+        case .ocr: return "text.viewfinder"
         case .summarize: return "sparkles"
         }
     }
 
-    var needsPDF: Bool { self != .fromImages }
+    var needsPDF: Bool { self != .fromImages && self != .ocr }
+    var acceptsImages: Bool { self == .fromImages || self == .ocr }
 
     var tint: Color {
         switch self {
@@ -76,6 +79,7 @@ enum PDFTool: String, CaseIterable, Identifiable {
         case .toImages: return .awPurple
         case .fromImages: return .awPink
         case .text: return .gray
+        case .ocr: return .awTeal
         case .summarize: return .awPurple
         }
     }
@@ -93,6 +97,7 @@ struct PDFToolsView: View {
     @State private var summaryWords = 250
     @State private var logo: NSImage?
     @State private var output = ""
+    @State private var ocrProgress: String?
     @State private var working = false
     @State private var toast: Toast?
     @State private var settings = AppSettings.shared
@@ -121,10 +126,10 @@ struct PDFToolsView: View {
                 HStack(alignment: .top, spacing: 16) {
                     VStack(spacing: 16) {
                         if files.isEmpty {
-                            DropZone(title: tool == .fromImages ? "اسحب الصور هنا" : "اسحب ملفات PDF هنا",
+                            DropZone(title: tool == .fromImages ? "اسحب الصور هنا" : (tool == .ocr ? "اسحب صورة أو PDF ممسوح" : "اسحب ملفات PDF هنا"),
                                      subtitle: tool == .fromImages ? "png · jpg · heic — بالترتيب" : "ملف واحد أو أكثر — أو اضغط للاختيار",
-                                     symbol: tool == .fromImages ? "photo.stack" : "doc.badge.plus", tint: tint,
-                                     types: tool == .fromImages ? ["png", "jpg", "jpeg", "heic", "tiff"] : ["pdf"],
+                                     symbol: tool == .fromImages ? "photo.stack" : (tool == .ocr ? "text.viewfinder" : "doc.badge.plus"), tint: tint,
+                                     types: fileTypes,
                                      multiple: true) { add($0) }
                         } else {
                             fileList
@@ -153,7 +158,7 @@ struct PDFToolsView: View {
                     SectionLabel(text: "الملفات (\(files.count))", symbol: "folder")
                     Spacer()
                     Button("إضافة", systemImage: "plus") {
-                        let types = tool == .fromImages ? ["png", "jpg", "jpeg", "heic", "tiff"] : ["pdf"]
+                        let types = fileTypes
                         if let u = Panels.open(types: types, multiple: true) { add(u) }
                     }
                     .buttonStyle(.borderless)
@@ -237,6 +242,13 @@ struct PDFToolsView: View {
                 .buttonStyle(.glassProminent).controlSize(.large).tint(tool.tint)
                 .disabled(working || files.isEmpty || (tool == .summarize && !settings.hasKey))
 
+                if let ocrProgress {
+                    Label(ocrProgress, systemImage: "text.viewfinder")
+                        .font(.callout).foregroundStyle(.secondary)
+                        .symbolEffect(.pulse, isActive: true)
+                        .contentTransition(.numericText())
+                }
+
                 if !output.isEmpty {
                     Divider().opacity(0.4)
                     HStack {
@@ -268,7 +280,8 @@ struct PDFToolsView: View {
         case .compress: return "يصغّر حجم الصور داخل الملف."
         case .toImages: return "يحفظ كل صفحة صورة PNG بدقة عالية."
         case .fromImages: return "يجمع الصور في ملف PDF واحد بالترتيب."
-        case .text: return "يطلع النص من الملف المحدد (الملفات الممسوحة ضوئياً ما فيها نص)."
+        case .text: return "يطلع النص من الملف المحدد. لو كان ممسوحاً ضوئياً يقرأه تلقائياً."
+        case .ocr: return "يقرأ النص العربي والإنجليزي من الصور وملفات PDF الممسوحة، على جهازك بدون إنترنت."
         case .summarize: return "يلخّص الملف بالعربية ويخرج PDF عربي مرتب، مع شعارك إن أضفته."
         }
     }
@@ -362,16 +375,50 @@ struct PDFToolsView: View {
                 try saveDoc(try PDFService.images(imgs), "صور")
             case .text:
                 let t = PDFService.text(src!).trimmingCharacters(in: .whitespacesAndNewlines)
-                output = t.isEmpty ? "ما فيه نص قابل للنسخ. الملف غالباً صور ممسوحة." : t
+                if t.isEmpty, let u = activeURL ?? pdfs.first { ocr(u) { output = $0 } }
+                else { output = t }
+            case .ocr:
+                guard let u = activeURL ?? files.first else { throw ToolError.invalid("أضف ملفاً أولاً.") }
+                ocr(u) { output = $0 }
             case .summarize:
                 let t = PDFService.text(src!)
-                guard !t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                    throw ToolError.invalid("ما فيه نص في الملف ألخّصه.")
+                if t.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let u = activeURL ?? pdfs.first {
+                    ocr(u) { summarize($0) }
+                } else {
+                    summarize(t)
                 }
-                summarize(t)
             }
         } catch {
             toast = Toast(text: error.localizedDescription, isError: true)
+        }
+    }
+
+    private var fileTypes: [String] {
+        let images = ["png", "jpg", "jpeg", "heic", "tiff"]
+        switch tool {
+        case .fromImages: return images
+        case .ocr: return ["pdf"] + images
+        default: return ["pdf"]
+        }
+    }
+
+    /// قراءة ضوئية مع شريط تقدم، ثم تمرير النص.
+    private func ocr(_ url: URL, then: @escaping (String) -> Void) {
+        working = true
+        ocrProgress = "يقرأ الصفحات…"
+        Task {
+            defer { working = false; ocrProgress = nil }
+            do {
+                let t = try await OCRService.read(url) { done, total in
+                    Task { @MainActor in ocrProgress = "يقرأ صفحة \(done) من \(total)…" }
+                }
+                let clean = t.trimmingCharacters(in: .whitespacesAndNewlines)
+                if clean.isEmpty { toast = Toast(text: "ما لقيت نصاً مقروءاً في الملف", isError: true); return }
+                toast = Toast(text: "قُرئ \(ArabicLinter.words(clean).count) كلمة")
+                then(clean)
+            } catch {
+                toast = Toast(text: error.localizedDescription, isError: true)
+            }
         }
     }
 

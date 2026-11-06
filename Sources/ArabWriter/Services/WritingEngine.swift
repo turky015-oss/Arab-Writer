@@ -205,7 +205,7 @@ enum WritingEngine {
         return parts.joined(separator: "\n") + "\n\nالنص:\n" + r.text
     }
 
-    static func run(_ r: WriteRequest) async throws -> WriteResult {
+    static func run(_ r: WriteRequest, onPartial: ((String) -> Void)? = nil) async throws -> WriteResult {
         let settings = AppSettings.shared
         let en = settings.englishOnOwnLine
         let retry = settings.autoRetry
@@ -223,7 +223,13 @@ enum WritingEngine {
 
         let client = try settings.client()
         let system = SkillPrompt.writing
-        let raw = try await client.complete(system: system, user: instruction(for: r, en: en))
+        let user = instruction(for: r, en: en)
+        let raw: String
+        if let onPartial {
+            raw = try await client.stream(system: system, user: user) { onPartial(WritingEngine.splitQuestion($0).0) }
+        } else {
+            raw = try await client.complete(system: system, user: user)
+        }
         var (draft, question) = splitQuestion(raw)
         draft = ArabicLinter.fix(draft, englishOnOwnLine: en)
         var report = ArabicLinter.check(draft, options: opts)
@@ -253,7 +259,8 @@ enum WritingEngine {
                            changes: d.changes, similarity: d.similarity, usedAI: true)
     }
 
-    static func story(title: String, length: StoryLength, register: Register) async throws -> WriteResult {
+    static func story(title: String, length: StoryLength, register: Register,
+                      onPartial: ((String) -> Void)? = nil) async throws -> WriteResult {
         let settings = AppSettings.shared
         let en = settings.englishOnOwnLine
         let client = try settings.client()
@@ -265,7 +272,12 @@ enum WritingEngine {
 
         العنوان: \(title)
         """
-        let raw = try await client.complete(system: SkillPrompt.story, user: ask)
+        let raw: String
+        if let onPartial {
+            raw = try await client.stream(system: SkillPrompt.story, user: ask) { onPartial($0) }
+        } else {
+            raw = try await client.complete(system: SkillPrompt.story, user: ask)
+        }
         let (draft, q) = splitQuestion(raw)
         let out = ArabicLinter.fix(draft, englishOnOwnLine: en)
         return WriteResult(text: out, question: q,

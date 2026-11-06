@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct SettingsView: View {
     @State private var settings = AppSettings.shared
@@ -46,6 +47,22 @@ struct SettingsView: View {
             SwiftUI.Section("الكتابة") {
                 Toggle("ضع كل كلمة إنجليزية في سطر مستقل", isOn: $settings.englishOnOwnLine)
                 Toggle("جولة تصحيح ثانية تلقائية إن بقيت أخطاء", isOn: $settings.autoRetry)
+            }
+
+            SwiftUI.Section {
+                Label("ظلّل أي نص في أي برنامج ← كليك يمين ← الخدمات", systemImage: "cursorarrow.click.2")
+                Label("صحّح الإملاء والترقيم: فوري وبدون إنترنت", systemImage: "checkmark.seal")
+                Label("أعد الصياغة بصوت بشري: يحتاج المفتاح", systemImage: "wand.and.stars")
+                Label("افتح النص في البرنامج", systemImage: "arrow.up.forward.app")
+                Button("افتح إعدادات الخدمات في النظام") {
+                    if let u = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
+                        NSWorkspace.shared.open(u)
+                    }
+                }
+            } header: {
+                Text("دقّق من أي برنامج")
+            } footer: {
+                Text("إذا ما ظهرت الخدمات: لوحة المفاتيح ← اختصارات لوحة المفاتيح ← الخدمات ← النص، وفعّل خدمات Arab Writer. وتقدر تعطيها اختصاراً.")
             }
 
             SwiftUI.Section("الواجهة") {

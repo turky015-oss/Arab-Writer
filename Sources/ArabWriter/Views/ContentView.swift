@@ -46,6 +46,7 @@ struct ContentView: View {
     @State private var settings = AppSettings.shared
     @Environment(\.openSettings) private var openSettings
     @State private var pointer: CGPoint?
+    @State private var inbox = Inbox.shared
 
     var body: some View {
         NavigationSplitView {
@@ -85,6 +86,7 @@ struct ContentView: View {
             }
         }
         .onChange(of: selection) { SoundFX.play(.switchTab) }
+        .onChange(of: inbox.text) { if inbox.text != nil { selection = .writer } }
         .navigationTitle("Arab Writer")
     }
 

@@ -69,6 +69,71 @@ struct ClaudeClient {
     var apiKey: String
     var model: String
 
+    /// بث حي: يستدعي onText بالنص المتراكم كلما وصل جزء جديد، ويرجع النص الكامل.
+    func stream(system: String, user: String, maxTokens: Int = 4096,
+                onText: @escaping @MainActor (String) -> Void) async throws -> String {
+        var req = request(system: system, user: user, maxTokens: maxTokens)
+        var body = (try JSONSerialization.jsonObject(with: req.httpBody ?? Data())) as? [String: Any] ?? [:]
+        body["stream"] = true
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (bytes, resp) = try await URLSession.shared.bytes(for: req)
+        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        guard code == 200 else {
+            var raw = Data()
+            for try await b in bytes { raw.append(b) }
+            let json = (try? JSONSerialization.jsonObject(with: raw)) as? [String: Any]
+            let msg = ((json?["error"] as? [String: Any])?["message"] as? String) ?? String(decoding: raw, as: UTF8.self)
+            throw ClaudeError.http(code, msg)
+        }
+
+        var text = ""
+        var lastPush = Date.distantPast
+        for try await line in bytes.lines {
+            guard line.hasPrefix("data:") else { continue }
+            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+            guard let data = payload.data(using: .utf8),
+                  let ev = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { continue }
+            switch ev["type"] as? String {
+            case "content_block_delta":
+                if let d = ev["delta"] as? [String: Any], let t = d["text"] as? String {
+                    text += t
+                    // تحديث الواجهة بحد أقصى ٢٥ مرة في الثانية
+                    if Date().timeIntervalSince(lastPush) > 0.04 {
+                        lastPush = Date()
+                        let snapshot = text
+                        await onText(snapshot)
+                    }
+                }
+            case "error":
+                let msg = ((ev["error"] as? [String: Any])?["message"] as? String) ?? "خطأ أثناء البث"
+                throw ClaudeError.http(529, msg)
+            default: break
+            }
+        }
+        let final = text
+        await onText(final)
+        guard !final.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ClaudeError.empty }
+        return final.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func request(system: String, user: String, maxTokens: Int) -> URLRequest {
+        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        req.httpMethod = "POST"
+        req.timeoutInterval = 180
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        let body: [String: Any] = [
+            "model": model,
+            "max_tokens": maxTokens,
+            "system": [["type": "text", "text": system, "cache_control": ["type": "ephemeral"]]],
+            "messages": [["role": "user", "content": user]],
+        ]
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        return req
+    }
+
     func complete(system: String, user: String, maxTokens: Int = 4096) async throws -> String {
         var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         req.httpMethod = "POST"

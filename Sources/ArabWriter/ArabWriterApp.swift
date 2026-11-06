@@ -32,6 +32,8 @@ struct ArabWriterApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         ArabicFont.registerBundled()
+        NSApp.servicesProvider = ServiceProvider.shared
+        NSUpdateDynamicServices()
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
     }

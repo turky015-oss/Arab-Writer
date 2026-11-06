@@ -12,6 +12,8 @@ struct WriterView: View {
     @State private var result: WriteResult?
     @State private var working = false
     @State private var showDiff = false
+    @State private var live = ""
+    @State private var inbox = Inbox.shared
     @State private var toast: Toast?
     @State private var settings = AppSettings.shared
     @Namespace private var glass
@@ -42,6 +44,14 @@ struct WriterView: View {
         }
         .scrollContentBackground(.hidden)
         .toast($toast)
+        .onChange(of: inbox.text, initial: true) {
+            if let t = inbox.text {
+                input = t
+                result = nil
+                inbox.text = nil
+                toast = Toast(text: "وصل النص، اختر المهمة واضغط نفّذ")
+            }
+        }
     }
 
     // MARK: الأدوات
@@ -183,10 +193,12 @@ struct WriterView: View {
                     }
                 }
                 Group {
-                    if working {
+                    if working && !live.isEmpty {
+                        LiveText(text: live, tint: .awBlue)
+                    } else if working {
                         VStack(spacing: 14) {
                             ProgressView()
-                            Text(settings.hasKey ? "يكتب ويدقق ويفحص…" : "يصلح ويفحص…").foregroundStyle(.secondary)
+                            Text(settings.hasKey ? "يتصل بـ Claude…" : "يصلح ويفحص…").foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else if let r = result {
@@ -254,7 +266,9 @@ struct WriterView: View {
         Task {
             defer { working = false }
             do {
-                result = try await WritingEngine.run(req)
+                live = ""
+                result = try await WritingEngine.run(req) { live = $0 }
+                live = ""
                 if !settings.hasKey { toast = Toast(text: "أصلحتُ الآمن آلياً. أضف مفتاحك لإعادة الصياغة الكاملة") }
             } catch {
                 toast = Toast(text: error.localizedDescription, isError: true)
