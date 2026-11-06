@@ -45,6 +45,7 @@ struct ContentView: View {
     @State private var selection: AppSection? = .writer
     @State private var settings = AppSettings.shared
     @Environment(\.openSettings) private var openSettings
+    @State private var pointer: CGPoint?
 
     var body: some View {
         NavigationSplitView {
@@ -62,6 +63,7 @@ struct ContentView: View {
         } detail: {
             ZStack {
                 AppBackdrop(tint: (selection ?? .writer).tint)
+                PointerSpotlight(point: pointer, tint: (selection ?? .writer).tint)
                 Group {
                     switch selection ?? .writer {
                     case .writer: WriterView()
@@ -75,17 +77,30 @@ struct ContentView: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.99)))
             }
             .animation(.smooth(duration: 0.35), value: selection)
+            .onContinuousHover(coordinateSpace: .local) { phase in
+                switch phase {
+                case .active(let p): pointer = p
+                case .ended: withAnimation(.smooth) { pointer = nil }
+                }
+            }
         }
+        .onChange(of: selection) { SoundFX.play(.switchTab) }
         .navigationTitle("Arab Writer")
     }
 
     private func row(_ s: AppSection) -> some View {
         Label {
-            Text(s.title)
+            Text(s.title).font(.body.weight(selection == s ? .semibold : .regular))
         } icon: {
             Image(systemName: s.symbol)
-                .foregroundStyle(s.tint)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(s.tint.gradient, in: .rect(cornerRadius: 7))
+                .shadow(color: s.tint.opacity(0.4), radius: 3, y: 1)
+                .symbolEffect(.bounce, value: selection == s)
         }
+        .padding(.vertical, 3)
         .tag(s)
     }
 

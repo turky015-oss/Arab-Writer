@@ -155,6 +155,7 @@ struct WriterView: View {
                             .help("التشابه مع الأصل \(r.similarity)%")
                         Button("نسخ", systemImage: "doc.on.doc") {
                             Panels.copy(r.text)
+                            SoundFX.play(.copy)
                             toast = Toast(text: "نُسخ النص")
                         }
                         .labelStyle(.iconOnly).buttonStyle(.borderless)
@@ -227,6 +228,7 @@ struct WriterView: View {
     // MARK: التنفيذ
 
     private func run() {
+        SoundFX.play(.start)
         let req = WriteRequest(text: input, mode: mode, register: register, platform: platform,
                                words: lockLength ? words : nil)
         working = true

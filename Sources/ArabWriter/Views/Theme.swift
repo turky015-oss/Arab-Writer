@@ -83,6 +83,8 @@ struct PageHeader: View {
                 )
                 .glassEffect(.clear, in: .rect(cornerRadius: 15))
                 .shadow(color: tint.opacity(0.35), radius: 10, y: 4)
+                .hoverTilt(radius: 15, tilt: 18, glow: .white, sound: false)
+                .symbolEffect(.bounce, value: title)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.system(size: 26, weight: .bold, design: .rounded))
                 Text(subtitle).font(.callout).foregroundStyle(.secondary)
@@ -216,7 +218,7 @@ struct DropZone: View {
 
     var body: some View {
         Button {
-            if let urls = Panels.open(types: types, multiple: multiple), !urls.isEmpty { onFiles(urls) }
+            if let urls = Panels.open(types: types, multiple: multiple), !urls.isEmpty { SoundFX.play(.drop); onFiles(urls) }
         } label: {
             VStack(spacing: 12) {
                 Image(systemName: symbol)
@@ -238,9 +240,10 @@ struct DropZone: View {
         )
         .dropDestination(for: URL.self) { urls, _ in
             let ok = urls.filter { types.contains($0.pathExtension.lowercased()) }
-            if !ok.isEmpty { onFiles(multiple ? ok : [ok[0]]) }
+            if !ok.isEmpty { SoundFX.play(.drop); onFiles(multiple ? ok : [ok[0]]) }
             return !ok.isEmpty
         } isTargeted: { hovering = $0 }
+        .hoverTilt(radius: 28, tilt: 3, glow: tint)
         .animation(.smooth, value: hovering)
     }
 }
@@ -261,6 +264,7 @@ struct ToastView: View {
             .glassEffect(.regular.tint((toast.isError ? Color.awPink : Color.awGreen).opacity(0.15)), in: .capsule)
             .padding(.bottom, 20)
             .transition(.move(edge: .bottom).combined(with: .opacity))
+            .onAppear { SoundFX.play(toast.isError ? .error : .success) }
     }
 }
 

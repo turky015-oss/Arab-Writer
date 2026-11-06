@@ -44,8 +44,18 @@ struct WordView: View {
                 PageHeader(title: "وورد", subtitle: "دقّق ملفك وعدّله مع بقاء تنسيقه كما هو", symbol: "doc.richtext", tint: tint)
                 if let url { editor(url) }
                 else {
-                    DropZone(title: "اسحب ملف وورد هنا", subtitle: "docx · doc · rtf · txt — أو اضغط للاختيار",
-                             symbol: "doc.richtext", tint: tint, types: ["docx", "doc", "rtf", "txt", "md"]) { load($0[0]) }
+                    FileHero(format: "DOCX", symbol: "doc.richtext", tint: tint,
+                             headline: "دقّق ملف وورد بدون ما يخرب تنسيقه",
+                             features: [
+                                Feature(symbol: "checkmark.seal.fill", title: "تدقيق آمن", caption: "إملاء وترقيم ومسافات، والخطوط والألوان باقية"),
+                                Feature(symbol: "wand.and.stars", title: "صياغة ذكية", caption: "يمسح بصمات الذكاء الاصطناعي من المستند كله"),
+                                Feature(symbol: "magnifyingglass", title: "بحث واستبدال", caption: "يغيّر كلمة في كل المستند بضغطة"),
+                                Feature(symbol: "text.alignright", title: "اتجاه عربي", caption: "يقلب الفقرات المعكوسة لليمين"),
+                                Feature(symbol: "doc.fill", title: "تحويل إلى PDF", caption: "بخط أميري وترتيب عربي صحيح"),
+                                Feature(symbol: "chart.bar.doc.horizontal", title: "تقرير الفحص", caption: "عدد الأخطاء والتنبيهات وموضع كل واحد"),
+                             ],
+                             dropTitle: "اسحب ملف وورد هنا", dropSubtitle: "docx · doc · rtf · txt — أو اضغط للاختيار",
+                             types: ["docx", "doc", "rtf", "txt", "md"]) { load($0[0]) }
                 }
             }
             .padding(28)
@@ -56,29 +66,31 @@ struct WordView: View {
 
     private func editor(_ url: URL) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            GlassEffectContainer(spacing: 12) {
-                HStack(spacing: 10) {
-                    Label(url.lastPathComponent, systemImage: "doc.fill")
-                        .font(.headline).lineLimit(1)
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .glassEffect(.regular.tint(tint.opacity(0.12)), in: .capsule)
-                    Spacer()
-                    Button("تدقيق آمن", systemImage: "checkmark.seal") { safeProof() }
-                        .buttonStyle(.glass)
-                    Button("إعادة صياغة ذكية", systemImage: "wand.and.stars") { aiRewrite() }
-                        .buttonStyle(.glass).disabled(!settings.hasKey || working)
-                    Button("اتجاه عربي", systemImage: "text.alignright") {
+            HStack(spacing: 14) {
+                FormatBadge(label: "DOCX", symbol: "doc.richtext", tint: tint, size: 58)
+                    .rotationEffect(.degrees(-6))
+                    .hoverTilt(radius: 10, tilt: 14, glow: tint, sound: false)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(url.lastPathComponent).font(.title3.weight(.semibold)).lineLimit(1)
+                    Text("\(ArabicLinter.words(doc.string).count) كلمة · \(doc.string.components(separatedBy: "\n").filter { !$0.isEmpty }.count) فقرة")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("إغلاق", systemImage: "xmark") { self.url = nil; report = nil }
+                    .labelStyle(.iconOnly).buttonStyle(.glass).controlSize(.large)
+            }
+
+            GlassEffectContainer(spacing: 10) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 10)], spacing: 10) {
+                    ActionTile(title: "تدقيق آمن", symbol: "checkmark.seal.fill", tint: .awGreen) { safeProof() }
+                    ActionTile(title: "صياغة ذكية", symbol: "wand.and.stars", tint: .awPurple,
+                               disabled: !settings.hasKey || working) { aiRewrite() }
+                    ActionTile(title: "اتجاه عربي", symbol: "text.alignright", tint: .awBlue) {
                         DocxService.forceRTL(doc); bump(); toast = Toast(text: "كل الفقرات صارت من اليمين")
                     }
-                    .buttonStyle(.glass)
-                    Menu {
-                        Button("حفظ وورد", systemImage: "doc.richtext") { save("docx") }
-                        Button("حفظ PDF", systemImage: "doc") { save("pdf") }
-                        Button("حفظ نص", systemImage: "doc.plaintext") { save("txt") }
-                    } label: { Label("حفظ", systemImage: "square.and.arrow.down") }
-                    .menuStyle(.button).buttonStyle(.glassProminent).tint(tint).fixedSize()
-                    Button("إغلاق", systemImage: "xmark") { self.url = nil; report = nil }
-                        .labelStyle(.iconOnly).buttonStyle(.glass)
+                    ActionTile(title: "حفظ وورد", symbol: "doc.richtext.fill", tint: tint) { save("docx") }
+                    ActionTile(title: "حفظ PDF", symbol: "doc.fill", tint: .awPink) { save("pdf") }
+                    ActionTile(title: "حفظ نص", symbol: "doc.plaintext.fill", tint: .gray) { save("txt") }
                 }
             }
 

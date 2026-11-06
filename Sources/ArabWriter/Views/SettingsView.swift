@@ -4,6 +4,7 @@ struct SettingsView: View {
     @State private var settings = AppSettings.shared
     @State private var key = ""
     @State private var saved = false
+    @State private var sounds = SoundFX.enabled
 
     var body: some View {
         Form {
@@ -45,6 +46,14 @@ struct SettingsView: View {
             SwiftUI.Section("الكتابة") {
                 Toggle("ضع كل كلمة إنجليزية في سطر مستقل", isOn: $settings.englishOnOwnLine)
                 Toggle("جولة تصحيح ثانية تلقائية إن بقيت أخطاء", isOn: $settings.autoRetry)
+            }
+
+            SwiftUI.Section("الواجهة") {
+                Toggle("أصوات الواجهة", isOn: $sounds)
+                    .onChange(of: sounds) {
+                        UserDefaults.standard.set(sounds, forKey: "sounds")
+                        if sounds { SoundFX.play(.success) }
+                    }
             }
         }
         .formStyle(.grouped)

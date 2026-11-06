@@ -61,6 +61,24 @@ enum PDFTool: String, CaseIterable, Identifiable {
     }
 
     var needsPDF: Bool { self != .fromImages }
+
+    var tint: Color {
+        switch self {
+        case .merge: return .awBlue
+        case .split: return .awTeal
+        case .extract: return .awIndigo
+        case .delete: return .awPink
+        case .reorder: return .awOrange
+        case .watermark: return .awTeal
+        case .number: return .awBlue
+        case .protect: return Color(red: 0.95, green: 0.7, blue: 0.1)
+        case .compress: return .awGreen
+        case .toImages: return .awPurple
+        case .fromImages: return .awPink
+        case .text: return .gray
+        case .summarize: return .awPurple
+        }
+    }
 }
 
 struct PDFToolsView: View {
@@ -80,29 +98,34 @@ struct PDFToolsView: View {
     @State private var settings = AppSettings.shared
 
     private let tint = Color.awPink
-    private let columns = [GridItem(.adaptive(minimum: 104), spacing: 10)]
+    private let columns = [GridItem(.adaptive(minimum: 96), spacing: 10)]
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 PageHeader(title: "PDF", subtitle: "دمج وتقسيم وحماية وتلخيص، كله على جهازك", symbol: "doc.on.doc", tint: tint)
 
-                GlassPanel {
-                    GlassEffectContainer(spacing: 10) {
-                        LazyVGrid(columns: columns, spacing: 10) {
-                            ForEach(PDFTool.allCases) { t in
-                                Button { withAnimation(.smooth) { tool = t; output = "" } } label: {
-                                    VStack(spacing: 6) {
-                                        Image(systemName: t.symbol).font(.system(size: 18, weight: .medium))
-                                        Text(t.title).font(.caption.weight(.medium)).lineLimit(1)
-                                    }
-                                    .frame(maxWidth: .infinity, minHeight: 58)
-                                    .foregroundStyle(tool == t ? .white : .primary)
-                                    .contentShape(.rect)
-                                }
-                                .buttonStyle(.plain)
-                                .glassEffect(tool == t ? Glass.regular.tint(tint).interactive() : Glass.regular.interactive(),
-                                             in: .rect(cornerRadius: 16))
+                if files.isEmpty {
+                    HStack(spacing: 28) {
+                        FormatBadge(label: "PDF", symbol: "doc.text.fill", tint: tint)
+                            .rotationEffect(.degrees(-8))
+                            .hoverTilt(radius: 20, tilt: 14, glow: tint)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("كل أدوات الـ PDF في مكان واحد").font(.system(size: 30, weight: .bold, design: .rounded))
+                            Text("اختر الأداة، اسحب الملف، واضغط نفّذ. ولا ملف يطلع من جهازك.")
+                                .font(.title3).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(.horizontal, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                GlassEffectContainer(spacing: 10) {
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        ForEach(PDFTool.allCases) { t in
+                            ActionTile(title: t.title, symbol: t.symbol, tint: t.tint, selected: tool == t) {
+                                withAnimation(.smooth) { tool = t; output = "" }
                             }
                         }
                     }
@@ -128,6 +151,7 @@ struct PDFToolsView: View {
                 }
             }
             .padding(28)
+            .animation(.smooth, value: files.isEmpty)
         }
         .scrollContentBackground(.hidden)
         .toast($toast)
@@ -173,9 +197,16 @@ struct PDFToolsView: View {
     // MARK: لوحة الأداة
 
     private var inspector: some View {
-        GlassPanel(tint: tint) {
+        GlassPanel(tint: tool.tint) {
             VStack(alignment: .leading, spacing: 14) {
-                Label(tool.title, systemImage: tool.symbol).font(.title3.weight(.semibold))
+                HStack(spacing: 10) {
+                    Image(systemName: tool.symbol)
+                        .font(.system(size: 18, weight: .semibold)).foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .background(tool.tint.gradient, in: .rect(cornerRadius: 12))
+                        .symbolEffect(.bounce, value: tool)
+                    Text(tool.title).font(.title3.weight(.semibold))
+                }
                 Text(help).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
 
                 switch tool {
@@ -216,7 +247,7 @@ struct PDFToolsView: View {
                     .frame(maxWidth: .infinity)
                     .font(.headline)
                 }
-                .buttonStyle(.glassProminent).controlSize(.large).tint(tint)
+                .buttonStyle(.glassProminent).controlSize(.large).tint(tool.tint)
                 .disabled(working || files.isEmpty || (tool == .summarize && !settings.hasKey))
 
                 if !output.isEmpty {
@@ -224,7 +255,7 @@ struct PDFToolsView: View {
                     HStack {
                         SectionLabel(text: "الناتج", symbol: "text.alignright")
                         Spacer()
-                        Button("نسخ", systemImage: "doc.on.doc") { Panels.copy(output); toast = Toast(text: "نُسخ") }
+                        Button("نسخ", systemImage: "doc.on.doc") { Panels.copy(output); SoundFX.play(.copy); toast = Toast(text: "نُسخ") }
                             .labelStyle(.iconOnly).buttonStyle(.borderless)
                     }
                     ScrollView {
@@ -285,6 +316,7 @@ struct PDFToolsView: View {
     }
 
     private func run() {
+        SoundFX.play(.start)
         do {
             let pdfs = files.filter { $0.pathExtension.lowercased() == "pdf" }
             let src: PDFDocument? = {

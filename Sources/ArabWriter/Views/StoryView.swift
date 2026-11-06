@@ -87,6 +87,7 @@ struct StoryView: View {
 
     private func run() {
         guard !working, !title.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        SoundFX.play(.start)
         working = true
         Task {
             defer { working = false }

@@ -21,8 +21,18 @@ struct SheetView: View {
                 PageHeader(title: "إكسل", subtitle: "رتّب، نظّف، احسب، وعدّل الخلايا", symbol: "tablecells", tint: tint)
                 if url != nil, sheets.indices.contains(current) { workspace }
                 else {
-                    DropZone(title: "اسحب ملف إكسل هنا", subtitle: "xlsx · csv — أو اضغط للاختيار",
-                             symbol: "tablecells", tint: tint, types: ["xlsx", "xlsm", "csv", "tsv"]) { load($0[0]) }
+                    FileHero(format: "XLSX", symbol: "tablecells", tint: tint,
+                             headline: "رتّب جدولك واحسبه في ثواني",
+                             features: [
+                                Feature(symbol: "pencil.and.list.clipboard", title: "تعديل الخلايا", caption: "اكتب في أي خلية مباشرة، وأضف صفوفاً وأعمدة"),
+                                Feature(symbol: "arrow.up.arrow.down", title: "ترتيب", caption: "تصاعدي وتنازلي، أرقام ونصوص عربية"),
+                                Feature(symbol: "sum", title: "حسابات سريعة", caption: "مجموع ومتوسط وأكبر وأصغر وعدد"),
+                                Feature(symbol: "plus.forwardslash.minus", title: "ضرب وقسمة", caption: "طبّق رقماً على عمود كامل دفعة وحدة"),
+                                Feature(symbol: "sparkles", title: "تنظيف", caption: "مسافات زائدة وصفوف فارغة ومكررة"),
+                                Feature(symbol: "checkmark.seal.fill", title: "تدقيق عربي", caption: "يصحح إملاء النصوص داخل العمود"),
+                             ],
+                             dropTitle: "اسحب ملف إكسل هنا", dropSubtitle: "xlsx · csv — أو اضغط للاختيار",
+                             types: ["xlsx", "xlsm", "csv", "tsv"]) { load($0[0]) }
                 }
             }
             .padding(28)
@@ -44,33 +54,34 @@ struct SheetView: View {
 
     private var workspace: some View {
         VStack(alignment: .leading, spacing: 16) {
-            GlassEffectContainer(spacing: 12) {
-                HStack(spacing: 10) {
-                    Label(url?.lastPathComponent ?? "", systemImage: "tablecells.fill")
-                        .font(.headline).lineLimit(1)
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .glassEffect(.regular.tint(tint.opacity(0.12)), in: .capsule)
-                    if sheets.count > 1 {
-                        Picker("", selection: $current) {
-                            ForEach(sheets.indices, id: \.self) { Text(sheets[$0].name).tag($0) }
-                        }
-                        .pickerStyle(.segmented).labelsHidden().fixedSize()
-                    }
-                    Toggle("الصف الأول عناوين", isOn: $headerRow).toggleStyle(.switch).controlSize(.small)
-                    Spacer()
-                    Menu {
-                        Button("حفظ إكسل", systemImage: "tablecells") { save("xlsx") }
-                        Button("حفظ CSV", systemImage: "doc.plaintext") { save("csv") }
-                    } label: { Label("حفظ", systemImage: "square.and.arrow.down") }
-                    .menuStyle(.button).buttonStyle(.glassProminent).tint(tint).fixedSize()
-                    Button("إغلاق", systemImage: "xmark") { url = nil; sheets = []; calc = nil }
-                        .labelStyle(.iconOnly).buttonStyle(.glass)
+            HStack(spacing: 14) {
+                FormatBadge(label: url?.pathExtension.uppercased() == "CSV" ? "CSV" : "XLSX", symbol: "tablecells", tint: tint, size: 58)
+                    .rotationEffect(.degrees(-6))
+                    .hoverTilt(radius: 10, tilt: 14, glow: tint, sound: false)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(url?.lastPathComponent ?? "").font(.title3.weight(.semibold)).lineLimit(1)
+                    Text("\(sheet.rows.count) صف · \(sheet.columnCount) عمود").font(.callout).foregroundStyle(.secondary)
                 }
+                if sheets.count > 1 {
+                    Picker("", selection: $current) {
+                        ForEach(sheets.indices, id: \.self) { Text(sheets[$0].name).tag($0) }
+                    }
+                    .pickerStyle(.segmented).labelsHidden().fixedSize()
+                }
+                Spacer()
+                Toggle("الصف الأول عناوين", isOn: $headerRow).toggleStyle(.switch).controlSize(.small)
+                Menu {
+                    Button("حفظ إكسل", systemImage: "tablecells") { save("xlsx") }
+                    Button("حفظ CSV", systemImage: "doc.plaintext") { save("csv") }
+                } label: { Label("حفظ", systemImage: "square.and.arrow.down") }
+                .menuStyle(.button).buttonStyle(.glassProminent).tint(tint).fixedSize()
+                Button("إغلاق", systemImage: "xmark") { url = nil; sheets = []; calc = nil }
+                    .labelStyle(.iconOnly).buttonStyle(.glass)
             }
 
             HStack(alignment: .top, spacing: 16) {
                 GlassPanel(radius: 22) { grid }
-                tools.frame(width: 300)
+                tools.frame(width: 320)
             }
         }
     }
@@ -145,60 +156,82 @@ struct SheetView: View {
     // MARK: الأدوات
 
     private var tools: some View {
-        VStack(spacing: 14) {
+        let grid = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+        return VStack(spacing: 14) {
             GlassPanel {
                 VStack(alignment: .leading, spacing: 10) {
-                    SectionLabel(text: "العمود", symbol: "rectangle.split.3x1")
+                    SectionLabel(text: "العمود المحدد", symbol: "rectangle.split.3x1")
                     Picker("", selection: $column) {
                         ForEach(0..<sheet.columnCount, id: \.self) { Text(headers[$0]).tag($0) }
                     }
                     .labelsHidden()
-                    HStack {
-                        Button("تصاعدي", systemImage: "arrow.up") { sort(asc: true) }
-                        Button("تنازلي", systemImage: "arrow.down") { sort(asc: false) }
+                    GlassEffectContainer(spacing: 8) {
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                            ActionTile(title: "تصاعدي", symbol: "arrow.up", tint: .awBlue) { sort(asc: true) }
+                            ActionTile(title: "تنازلي", symbol: "arrow.down", tint: .awIndigo) { sort(asc: false) }
+                        }
                     }
-                    .buttonStyle(.glass)
                 }
             }
             GlassPanel(tint: tint) {
                 VStack(alignment: .leading, spacing: 10) {
                     SectionLabel(text: "احسب", symbol: "function")
-                    HStack {
-                        Button("مجموع") { aggregate("المجموع") { $0.reduce(0, +) } }
-                        Button("متوسط") { aggregate("المتوسط") { $0.isEmpty ? 0 : $0.reduce(0, +) / Double($0.count) } }
-                    }
-                    HStack {
-                        Button("أكبر") { aggregate("الأكبر") { $0.max() ?? 0 } }
-                        Button("أصغر") { aggregate("الأصغر") { $0.min() ?? 0 } }
-                        Button("عدد") { aggregate("العدد") { Double($0.count) } }
+                    GlassEffectContainer(spacing: 8) {
+                        LazyVGrid(columns: grid, spacing: 8) {
+                            ActionTile(title: "مجموع", symbol: "sum", tint: tint) { aggregate("المجموع") { $0.reduce(0, +) } }
+                            ActionTile(title: "متوسط", symbol: "divide", tint: .awTeal) {
+                                aggregate("المتوسط") { $0.isEmpty ? 0 : $0.reduce(0, +) / Double($0.count) }
+                            }
+                            ActionTile(title: "عدد", symbol: "number", tint: .awBlue) { aggregate("العدد") { Double($0.count) } }
+                            ActionTile(title: "أكبر", symbol: "arrow.up.to.line", tint: .awOrange) { aggregate("الأكبر") { $0.max() ?? 0 } }
+                            ActionTile(title: "أصغر", symbol: "arrow.down.to.line", tint: .awPurple) { aggregate("الأصغر") { $0.min() ?? 0 } }
+                        }
                     }
                     if let calc {
-                        Text(calc).font(.system(.title3, design: .rounded).weight(.bold)).textSelection(.enabled)
+                        Text(calc).font(.system(.title2, design: .rounded).weight(.bold)).textSelection(.enabled)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .glassEffect(.regular.tint(tint.opacity(0.2)), in: .rect(cornerRadius: 14))
                             .transition(.scale.combined(with: .opacity))
                     }
                     Divider().opacity(0.4)
-                    HStack {
-                        TextField("الرقم", text: $operand).textFieldStyle(.roundedBorder).frame(width: 70)
-                        Button("×") { apply { $0 * $1 } }
-                        Button("÷") { apply { $1 == 0 ? $0 : $0 / $1 } }
-                        Button("+") { apply { $0 + $1 } }
-                        Button("−") { apply { $0 - $1 } }
+                    HStack(spacing: 8) {
+                        TextField("الرقم", text: $operand).textFieldStyle(.roundedBorder).frame(width: 64)
+                        GlassEffectContainer(spacing: 6) {
+                            HStack(spacing: 6) {
+                                ForEach([("multiply", "×"), ("divide", "÷"), ("plus", "+"), ("minus", "−")], id: \.1) { item in
+                                    Button {
+                                        SoundFX.play(.tap)
+                                        switch item.1 {
+                                        case "×": apply { $0 * $1 }
+                                        case "÷": apply { $1 == 0 ? $0 : $0 / $1 }
+                                        case "+": apply { $0 + $1 }
+                                        default: apply { $0 - $1 }
+                                        }
+                                    } label: {
+                                        Image(systemName: item.0).font(.system(size: 14, weight: .bold)).frame(width: 22, height: 22)
+                                    }
+                                    .buttonStyle(.glass)
+                                }
+                            }
+                        }
                     }
-                    Text("يطبّق على العمود المحدد").font(.caption2).foregroundStyle(.secondary)
+                    Text("يطبّق الرقم على العمود المحدد").font(.caption2).foregroundStyle(.secondary)
                 }
-                .buttonStyle(.glass)
                 .animation(.smooth, value: calc)
             }
             GlassPanel {
                 VStack(alignment: .leading, spacing: 10) {
                     SectionLabel(text: "نظّف", symbol: "sparkles")
-                    Button("احذف المسافات الزائدة", systemImage: "text.badge.minus") { trim() }
-                    Button("احذف الصفوف الفارغة", systemImage: "rectangle.badge.minus") { dropEmpty() }
-                    Button("احذف المكرر", systemImage: "square.on.square") { dedupe() }
-                    Button("دقّق النص العربي في العمود", systemImage: "checkmark.seal") { proofColumn() }
+                    GlassEffectContainer(spacing: 8) {
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                            ActionTile(title: "المسافات", symbol: "text.badge.minus", tint: .awTeal) { trim() }
+                            ActionTile(title: "الصفوف الفارغة", symbol: "rectangle.badge.minus", tint: .awOrange) { dropEmpty() }
+                            ActionTile(title: "المكرر", symbol: "square.on.square", tint: .awPink) { dedupe() }
+                            ActionTile(title: "تدقيق عربي", symbol: "checkmark.seal.fill", tint: .awGreen) { proofColumn() }
+                        }
+                    }
                 }
-                .buttonStyle(.glass)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
