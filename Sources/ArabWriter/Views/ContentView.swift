@@ -81,23 +81,17 @@ struct ContentView: View {
     private var current: AppSection { router.section ?? .writer }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $router.section) {
-                SwiftUI.Section("النص") {
-                    ForEach(AppSection.textGroup) { row($0) }
-                }
-                SwiftUI.Section("الملفات") {
-                    ForEach(AppSection.filesGroup) { row($0) }
-                }
-            }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 290)
-            .safeAreaInset(edge: .top) { searchButton }
-            .safeAreaInset(edge: .bottom) { keyBadge }
-        } detail: {
-            ZStack {
-                AppBackdrop(tint: current.tint)
-                PointerSpotlight(point: pointer, tint: current.tint)
+        // تخطيط يدوي بدل NavigationSplitView: الشريط الجانبي ثابت ويظهر دائماً،
+        // ولا ينكمش أو يختفي مع الاتجاه من اليمين لليسار.
+        ZStack {
+            AppBackdrop(tint: current.tint).ignoresSafeArea()
+            PointerSpotlight(point: pointer, tint: current.tint).ignoresSafeArea()
+            HStack(spacing: 0) {
+                sidebar
+                    .frame(width: 250)
+                    .frame(maxHeight: .infinity)
+                    .glassEffect(.regular, in: .rect(cornerRadius: 20))
+                    .padding(.vertical, 10).padding(.leading, 10)
                 Group {
                     switch current {
                     case .writer: WriterView()
@@ -110,14 +104,17 @@ struct ContentView: View {
                     case .pdf: PDFToolsView()
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
                 .transition(.opacity.combined(with: .scale(scale: 0.99)))
+                .id(current)
             }
-            .animation(.smooth(duration: 0.35), value: router.section)
-            .onContinuousHover(coordinateSpace: .local) { phase in
-                switch phase {
-                case .active(let p): pointer = p
-                case .ended: withAnimation(.smooth) { pointer = nil }
-                }
+        }
+        .animation(.smooth(duration: 0.35), value: router.section)
+        .onContinuousHover(coordinateSpace: .local) { phase in
+            switch phase {
+            case .active(let p): pointer = p
+            case .ended: withAnimation(.smooth) { pointer = nil }
             }
         }
         .overlay {
@@ -130,6 +127,23 @@ struct ContentView: View {
         .onChange(of: router.section) { SoundFX.play(.switchTab) }
         .onChange(of: inbox.text) { if inbox.text != nil { router.section = .writer } }
         .navigationTitle("Arab Writer")
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            searchButton
+            List(selection: $router.section) {
+                SwiftUI.Section("النص") {
+                    ForEach(AppSection.textGroup) { row($0) }
+                }
+                SwiftUI.Section("الملفات") {
+                    ForEach(AppSection.filesGroup) { row($0) }
+                }
+            }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            keyBadge
+        }
     }
 
     private func row(_ s: AppSection) -> some View {
@@ -169,7 +183,7 @@ struct ContentView: View {
         }
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: .capsule)
-        .padding(.horizontal, 10).padding(.top, 6)
+        .padding(.horizontal, 10).padding(.top, 12)
     }
 
     private var keyBadge: some View {
