@@ -3,6 +3,7 @@ name: Build
 on:
   push:
     branches: [main, mac-app]
+    paths-ignore: ["android/**", ".github/workflows/android.yml", "README.md", "docs/**"]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:

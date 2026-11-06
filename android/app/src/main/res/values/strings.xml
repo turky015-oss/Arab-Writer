@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Arab Writer</string>
+    <string name="process_text">Arab Writer</string>
+    <string name="tile_label">فحص سريع</string>
+</resources>
