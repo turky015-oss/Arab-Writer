@@ -332,7 +332,7 @@ struct ActionTile: View {
                     .frame(width: 34, height: 34)
                     .background(selected ? AnyShapeStyle(.white.opacity(0.2)) : AnyShapeStyle(tint.opacity(0.14)),
                                 in: .rect(cornerRadius: 10))
-                Text(title).font(.caption.weight(.semibold)).lineLimit(1)
+                Text(title).font(.caption.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.75)
                     .foregroundStyle(selected ? .white : .primary)
             }
             .frame(maxWidth: .infinity, minHeight: 76)

@@ -83,9 +83,9 @@ struct WriterView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     SectionLabel(text: "المنصة", symbol: "square.grid.2x2")
                     GlassEffectContainer(spacing: 8) {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), spacing: 10)], spacing: 10) {
                             ForEach(Platform.allCases) { p in
-                                ActionTile(title: p.rawValue, symbol: p.symbol, tint: p.tint, selected: platform == p) {
+                                PlatformTile(platform: p, selected: platform == p) {
                                     withAnimation(.smooth) { platform = p }
                                 }
                             }
@@ -290,15 +290,63 @@ extension Register {
 }
 
 extension Platform {
-    var tint: Color {
+    /// الألوان الرسمية للمنصات.
+    var colors: [Color] {
         switch self {
-        case .none: return .gray
-        case .x: return Color(white: 0.25)
-        case .instagram: return .awPink
-        case .linkedin: return Color(red: 0.04, green: 0.4, blue: 0.76)
-        case .whatsapp: return .awGreen
-        case .official: return .awIndigo
-        case .script: return .awOrange
+        case .none: return [Color(white: 0.55), Color(white: 0.4)]
+        case .x: return [Color(white: 0.18), .black]
+        case .instagram: return [Color(red: 0.99, green: 0.69, blue: 0.27), Color(red: 0.99, green: 0.11, blue: 0.47), Color(red: 0.51, green: 0.23, blue: 0.71)]
+        case .linkedin: return [Color(red: 0.04, green: 0.4, blue: 0.76), Color(red: 0.0, green: 0.3, blue: 0.6)]
+        case .whatsapp: return [Color(red: 0.15, green: 0.83, blue: 0.4), Color(red: 0.07, green: 0.55, blue: 0.49)]
+        case .official: return [Color(red: 0.12, green: 0.2, blue: 0.4), Color(red: 0.75, green: 0.6, blue: 0.25)]
+        case .script: return [.awOrange, .awPink]
         }
+    }
+    var tint: Color { colors[colors.count / 2] }
+}
+
+/// مربع منصة: أيقونة على تدرج لونها الرسمي، والاسم ونوع المحتوى تحتها.
+struct PlatformTile: View {
+    let platform: Platform
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            SoundFX.play(.tap)
+            action()
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(LinearGradient(colors: platform.colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                    Image(systemName: platform.symbol)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .symbolEffect(.bounce, value: selected)
+                }
+                .frame(width: 40, height: 40)
+                .shadow(color: platform.tint.opacity(0.4), radius: 5, y: 3)
+                .overlay(alignment: .topTrailing) {
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(.white, platform.tint)
+                            .offset(x: 6, y: -6)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                Text(platform.rawValue).font(.callout.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                Text(platform.caption).font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity, minHeight: 100)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(selected ? Glass.regular.tint(platform.tint.opacity(0.35)).interactive() : Glass.regular.interactive(),
+                     in: .rect(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(platform.tint.opacity(selected ? 0.8 : 0), lineWidth: 2))
+        .hoverTilt(radius: 18, tilt: 9, glow: platform.tint)
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: selected)
     }
 }

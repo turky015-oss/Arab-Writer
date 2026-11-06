@@ -131,13 +131,26 @@ enum Platform: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var symbol: String {
         switch self {
-        case .none: return "circle.dashed"
-        case .x: return "at"
-        case .instagram: return "camera"
-        case .linkedin: return "briefcase"
-        case .whatsapp: return "message"
-        case .official: return "doc.text"
-        case .script: return "video"
+        case .none: return "circle.slash"
+        case .x: return "text.bubble.fill"
+        case .instagram: return "photo.on.rectangle.angled"
+        case .linkedin: return "briefcase.fill"
+        case .whatsapp: return "message.fill"
+        case .official: return "signature"
+        case .script: return "film.fill"
+        }
+    }
+
+    /// وصف قصير يظهر تحت اسم المنصة.
+    var caption: String {
+        switch self {
+        case .none: return "نص عام"
+        case .x: return "تغريدة قصيرة"
+        case .instagram: return "كابشن"
+        case .linkedin: return "منشور مهني"
+        case .whatsapp: return "رسالة"
+        case .official: return "فصحى رسمية"
+        case .script: return "للتصوير"
         }
     }
 }
