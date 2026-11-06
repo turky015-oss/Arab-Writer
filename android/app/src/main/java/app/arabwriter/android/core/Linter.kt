@@ -40,7 +40,11 @@ internal object RX {
 
     @Synchronized
     fun p(pattern: String, flags: Int = 0): Pattern =
-        cache.getOrPut("$flags|$pattern") { Pattern.compile(pattern, flags or Pattern.UNICODE_CHARACTER_CLASS) }
+        cache.getOrPut("$flags|$pattern") {
+            // أندرويد لا يدعم UNICODE_CHARACTER_CLASS (ومحرّكه يعامل \\w كيونيكود أصلاً)، فنجرّبه فقط على الكمبيوتر.
+            runCatching { Pattern.compile(pattern, flags or Pattern.UNICODE_CHARACTER_CLASS) }
+                .getOrElse { runCatching { Pattern.compile(pattern, flags) }.getOrElse { Pattern.compile("(?!)") } }
+        }
 
     fun find(pattern: String, s: String, flags: Int = 0): List<MatchResult> {
         val m = p(pattern, flags).matcher(s)
