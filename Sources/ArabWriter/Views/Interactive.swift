@@ -214,6 +214,55 @@ struct FeatureTile: View {
     }
 }
 
+/// رأس القسم: شارة مائلة كبيرة بجانب العنوان.
+struct HeroHeader: View {
+    let badge: String
+    let symbol: String
+    let tint: Color
+    let headline: String
+    let subline: String
+    var size: CGFloat = 96
+
+    @State private var appeared = false
+
+    var body: some View {
+        HStack(spacing: 24) {
+            FormatBadge(label: badge, symbol: symbol, tint: tint, size: size)
+                .rotationEffect(.degrees(appeared ? -6 : -16))
+                .offset(y: appeared ? 0 : 16)
+                .hoverTilt(radius: 18, tilt: 14, glow: tint)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(headline).font(.system(size: 28, weight: .bold, design: .rounded))
+                Text(subline).font(.title3).foregroundStyle(.secondary)
+                    .contentTransition(.opacity)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 6)
+        .onAppear { withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) { appeared = true } }
+    }
+}
+
+/// شبكة بطاقات القدرات تظهر بالتتابع.
+struct FeatureGrid: View {
+    let features: [Feature]
+    let tint: Color
+    var minimum: CGFloat = 230
+    @State private var appeared = false
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: minimum), spacing: 12)], spacing: 12) {
+            ForEach(Array(features.enumerated()), id: \.element.id) { i, f in
+                FeatureTile(feature: f, tint: tint)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 14)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.05 * Double(i)), value: appeared)
+            }
+        }
+        .onAppear { appeared = true }
+    }
+}
+
 /// واجهة البداية لأقسام الملفات: شارة كبيرة، قدرات، ومنطقة إسقاط.
 struct FileHero: View {
     let format: String

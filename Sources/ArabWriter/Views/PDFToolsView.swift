@@ -103,23 +103,10 @@ struct PDFToolsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                PageHeader(title: "PDF", subtitle: "دمج وتقسيم وحماية وتلخيص، كله على جهازك", symbol: "doc.on.doc", tint: tint)
 
-                if files.isEmpty {
-                    HStack(spacing: 28) {
-                        FormatBadge(label: "PDF", symbol: "doc.text.fill", tint: tint)
-                            .rotationEffect(.degrees(-8))
-                            .hoverTilt(radius: 20, tilt: 14, glow: tint)
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("كل أدوات الـ PDF في مكان واحد").font(.system(size: 30, weight: .bold, design: .rounded))
-                            Text("اختر الأداة، اسحب الملف، واضغط نفّذ. ولا ملف يطلع من جهازك.")
-                                .font(.title3).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                    }
-                    .padding(.horizontal, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                }
+                HeroHeader(badge: "PDF", symbol: "doc.text.fill", tint: tint,
+                           headline: "كل أدوات الـ PDF في مكان واحد",
+                           subline: "اختر الأداة، اسحب الملف، واضغط نفّذ. ولا ملف يطلع من جهازك.")
 
                 GlassEffectContainer(spacing: 10) {
                     LazyVGrid(columns: columns, spacing: 10) {

@@ -18,7 +18,6 @@ struct SheetView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                PageHeader(title: "إكسل", subtitle: "رتّب، نظّف، احسب، وعدّل الخلايا", symbol: "tablecells", tint: tint)
                 if url != nil, sheets.indices.contains(current) { workspace }
                 else {
                     FileHero(format: "XLSX", symbol: "tablecells", tint: tint,

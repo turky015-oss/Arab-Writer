@@ -15,30 +15,36 @@ struct CheckerView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                PageHeader(title: "الفاحص", subtitle: "يكشف بصمات الذكاء الاصطناعي والأخطاء لحظة الكتابة، بدون إنترنت",
-                           symbol: "checkmark.seal", tint: .awGreen)
+                HeroHeader(badge: "فحص", symbol: "checkmark.seal.fill", tint: .awGreen,
+                           headline: "افحص قبل ما تنشر",
+                           subline: "يكشف البصمات والأخطاء لحظة الكتابة، بدون إنترنت")
 
-                GlassEffectContainer(spacing: 12) {
+                GlassEffectContainer(spacing: 10) {
                     HStack(spacing: 10) {
-                        Toggle(isOn: $useSource.animation(.smooth)) { Label("قارن بالأصل", systemImage: "doc.on.doc") }
-                            .toggleStyle(.button).buttonStyle(.glass)
-                        Toggle(isOn: $lockWords.animation(.smooth)) { Label("قفل الطول", systemImage: "ruler") }
-                            .toggleStyle(.button).buttonStyle(.glass)
+                        ActionTile(title: "قارن بالأصل", symbol: "doc.on.doc.fill", tint: .awIndigo, selected: useSource) {
+                            withAnimation(.smooth) { useSource.toggle() }
+                        }
+                        .frame(width: 120)
+                        ActionTile(title: "قفل الطول", symbol: "ruler", tint: .awOrange, selected: lockWords) {
+                            withAnimation(.smooth) { lockWords.toggle() }
+                        }
+                        .frame(width: 120)
                         if lockWords {
-                            Stepper(value: $words, in: 10...1000, step: 10) { Text("\(words) كلمة").monospacedDigit() }
-                                .padding(.horizontal, 12).padding(.vertical, 6)
+                            Stepper(value: $words, in: 10...1000, step: 10) { Text("\(words) كلمة").font(.headline).monospacedDigit() }
+                                .padding(.horizontal, 16).padding(.vertical, 12)
                                 .glassEffect(.regular, in: .capsule)
+                                .transition(.scale.combined(with: .opacity))
                         }
                         Spacer()
-                        Button {
+                        ActionTile(title: "انسخ النص", symbol: "doc.on.clipboard.fill", tint: .awBlue, disabled: text.isEmpty) {
+                            Panels.copy(text); SoundFX.play(.copy)
+                        }
+                        .frame(width: 120)
+                        ActionTile(title: "أصلح الآمن", symbol: "bandage.fill", tint: .awGreen, disabled: text.isEmpty) {
                             text = ArabicLinter.fix(text, englishOnOwnLine: settings.englishOnOwnLine)
                             toast = Toast(text: "أُصلح الآمن: الإملاء والترقيم والمسافات")
-                        } label: {
-                            Label("أصلح الآمن", systemImage: "bandage")
                         }
-                        .buttonStyle(.glassProminent)
-                        .tint(.awGreen)
-                        .disabled(text.isEmpty)
+                        .frame(width: 120)
                     }
                 }
 
@@ -68,8 +74,15 @@ struct CheckerView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             SectionLabel(text: "التقرير", symbol: "checklist")
                             if text.isEmpty {
-                                Text("التقرير يظهر هنا").foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, minHeight: 200)
+                                Text("يفحص:").font(.caption).foregroundStyle(.secondary)
+                                FeatureGrid(features: [
+                                    Feature(symbol: "cpu", title: "بصمات آلية", caption: "افتتاح وختام وحشو وترجمة حرفية"),
+                                    Feature(symbol: "textformat.abc", title: "الإملاء", caption: "أكثر من ١٥٠ خطأ شائع"),
+                                    Feature(symbol: "textformat.alt", title: "الترقيم", caption: "الفواصل والمسافات وعلامة الاستفهام"),
+                                    Feature(symbol: "arrow.left.and.right.text.vertical", title: "الاتجاه", caption: "الإنجليزي داخل السطر العربي"),
+                                    Feature(symbol: "waveform.path", title: "الإيقاع", caption: "جمل متشابهة الطول وتقطيع درامي"),
+                                    Feature(symbol: "exclamationmark.shield.fill", title: "الاختلاق", caption: "أرقام وأسماء ما هي في الأصل"),
+                                ], tint: .awGreen, minimum: 150)
                             } else {
                                 ReportView(report: report)
                             }

@@ -19,7 +19,8 @@ struct WriterView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                PageHeader(title: "الكتابة", subtitle: mode.hint, symbol: "wand.and.stars", tint: .awBlue)
+                HeroHeader(badge: "نص", symbol: "wand.and.stars", tint: .awBlue,
+                           headline: "اكتب بصوت إنسان", subline: mode.hint)
                 controls
                 HStack(alignment: .top, spacing: 16) {
                     inputPanel
@@ -46,71 +47,85 @@ struct WriterView: View {
     // MARK: الأدوات
 
     private var controls: some View {
-        GlassEffectContainer(spacing: 14) {
-            HStack(spacing: 12) {
-                Picker("", selection: $mode) {
-                    ForEach(WriteMode.allCases) { Label($0.rawValue, systemImage: $0.symbol).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 270)
-
-                Menu {
-                    Picker("السجل", selection: $register) {
-                        ForEach(Register.allCases) { Text($0.rawValue).tag($0) }
+        VStack(spacing: 16) {
+            HStack(alignment: .top, spacing: 16) {
+                GlassPanel {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SectionLabel(text: "المهمة", symbol: "target")
+                        GlassEffectContainer(spacing: 8) {
+                            HStack(spacing: 8) {
+                                ForEach(WriteMode.allCases) { m in
+                                    ActionTile(title: m.rawValue, symbol: m.symbol, tint: .awBlue, selected: mode == m) {
+                                        withAnimation(.smooth) { mode = m }
+                                    }
+                                }
+                            }
+                        }
                     }
-                    .pickerStyle(.inline)
-                } label: {
-                    Label("السجل: \(register.rawValue)", systemImage: "text.bubble")
                 }
-                .menuStyle(.button)
-                .buttonStyle(.glass)
-                .fixedSize()
-
-                Menu {
-                    Picker("المنصة", selection: $platform) {
-                        ForEach(Platform.allCases) { Label($0.rawValue, systemImage: $0.symbol).tag($0) }
+                GlassPanel {
+                    VStack(alignment: .leading, spacing: 10) {
+                        SectionLabel(text: "السجل", symbol: "text.bubble")
+                        GlassEffectContainer(spacing: 8) {
+                            HStack(spacing: 8) {
+                                ForEach(Register.allCases) { r in
+                                    ActionTile(title: r.rawValue, symbol: r.symbol, tint: .awTeal, selected: register == r) {
+                                        withAnimation(.smooth) { register = r }
+                                    }
+                                }
+                            }
+                        }
                     }
-                    .pickerStyle(.inline)
-                } label: {
-                    Label(platform == .none ? "المنصة" : platform.rawValue, systemImage: platform.symbol)
                 }
-                .menuStyle(.button)
-                .buttonStyle(.glass)
-                .fixedSize()
+            }
 
-                HStack(spacing: 8) {
-                    Toggle(isOn: $lockLength.animation(.smooth)) {
-                        Label("قفل الطول", systemImage: "ruler")
+            GlassPanel {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionLabel(text: "المنصة", symbol: "square.grid.2x2")
+                    GlassEffectContainer(spacing: 8) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 8)], spacing: 8) {
+                            ForEach(Platform.allCases) { p in
+                                ActionTile(title: p.rawValue, symbol: p.symbol, tint: p.tint, selected: platform == p) {
+                                    withAnimation(.smooth) { platform = p }
+                                }
+                            }
+                        }
                     }
-                    .toggleStyle(.button)
-                    .buttonStyle(.glass)
+                }
+            }
+
+            GlassEffectContainer(spacing: 12) {
+                HStack(spacing: 10) {
+                    ActionTile(title: "قفل الطول", symbol: "ruler", tint: .awOrange, selected: lockLength) {
+                        withAnimation(.smooth) { lockLength.toggle() }
+                    }
+                    .frame(width: 110)
                     if lockLength {
                         Stepper(value: $words, in: 10...1000, step: 10) {
-                            Text("\(words) كلمة").monospacedDigit()
+                            Text("\(words) كلمة").font(.headline).monospacedDigit()
                         }
-                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .padding(.horizontal, 16).padding(.vertical, 12)
                         .glassEffect(.regular, in: .capsule)
                         .glassEffectID("len", in: glass)
+                        .transition(.scale.combined(with: .opacity))
                     }
-                }
-
-                Spacer()
-
-                Button(action: run) {
-                    HStack(spacing: 8) {
-                        if working { ProgressView().controlSize(.small) }
-                        else { Image(systemName: "sparkles") }
-                        Text(working ? "يشتغل…" : "نفّذ")
+                    Spacer()
+                    Button(action: run) {
+                        HStack(spacing: 10) {
+                            if working { ProgressView().controlSize(.small) }
+                            else { Image(systemName: "sparkles").symbolEffect(.pulse, isActive: !input.isEmpty) }
+                            Text(working ? "يشتغل…" : "نفّذ")
+                        }
+                        .font(.title3.weight(.semibold))
+                        .padding(.horizontal, 22).padding(.vertical, 6)
                     }
-                    .font(.headline)
-                    .padding(.horizontal, 8)
+                    .buttonStyle(.glassProminent)
+                    .controlSize(.extraLarge)
+                    .tint(.awBlue)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(working || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .hoverTilt(radius: 30, tilt: 6, glow: .white, sound: false)
                 }
-                .buttonStyle(.glassProminent)
-                .controlSize(.large)
-                .tint(.awBlue)
-                .keyboardShortcut(.return, modifiers: .command)
-                .disabled(working || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
     }
@@ -189,13 +204,16 @@ struct WriterView: View {
                             }
                         }
                     } else {
-                        VStack(spacing: 10) {
-                            Image(systemName: "text.badge.checkmark").font(.system(size: 36, weight: .light))
-                                .foregroundStyle(Color.awBlue.opacity(0.7))
-                            Text("النتيجة تظهر هنا").foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 12) {
+                            FeatureGrid(features: [
+                                Feature(symbol: "eraser.fill", title: "يمسح البصمات", caption: "«في عالم اليوم» و«يلعب دوراً» وأخواتها"),
+                                Feature(symbol: "character.textbox", title: "يدقق اللغة", caption: "الهمزات والتاء والترقيم والنحو الشائع"),
+                                Feature(symbol: "lock.shield.fill", title: "لا يختلق", caption: "أي رقم أو اسم جديد ينكشف ويتعلّم عليه"),
+                                Feature(symbol: "arrow.left.arrow.right", title: "يوريك الفرق", caption: "كل كلمة تغيّرت عن الأصل"),
+                            ], tint: .awBlue, minimum: 200)
                             Text("⌘ + Return للتنفيذ").font(.caption).foregroundStyle(.tertiary)
+                                .frame(maxWidth: .infinity)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
                 .frame(minHeight: 320)
@@ -257,6 +275,30 @@ struct WriterView: View {
             toast = Toast(text: "حُفظ «\(url.lastPathComponent)»")
         } catch {
             toast = Toast(text: error.localizedDescription, isError: true)
+        }
+    }
+}
+
+extension Register {
+    var symbol: String {
+        switch self {
+        case .keep: return "equal.circle"
+        case .saudi: return "bubble.left.and.text.bubble.right.fill"
+        case .fusha: return "book.closed.fill"
+        }
+    }
+}
+
+extension Platform {
+    var tint: Color {
+        switch self {
+        case .none: return .gray
+        case .x: return Color(white: 0.25)
+        case .instagram: return .awPink
+        case .linkedin: return Color(red: 0.04, green: 0.4, blue: 0.76)
+        case .whatsapp: return .awGreen
+        case .official: return .awIndigo
+        case .script: return .awOrange
         }
     }
 }

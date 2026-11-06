@@ -41,7 +41,6 @@ struct WordView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                PageHeader(title: "وورد", subtitle: "دقّق ملفك وعدّله مع بقاء تنسيقه كما هو", symbol: "doc.richtext", tint: tint)
                 if let url { editor(url) }
                 else {
                     FileHero(format: "DOCX", symbol: "doc.richtext", tint: tint,
