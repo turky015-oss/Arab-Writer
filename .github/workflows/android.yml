@@ -70,7 +70,8 @@ jobs:
           gradle :app:assembleRelease --stacktrace > build.log 2>&1
           code=$?
           if [ $code -ne 0 ]; then
-            grep -E "^e: |error:|What went wrong|Could not" build.log | sort -u | head -30 | while IFS= read -r l; do echo "::error::$l"; done
+            { grep -E "^e: |error:" build.log | sort -u | head -15; grep -A6 "What went wrong" build.log | head -14; } | grep -v '^\s*$' | while IFS= read -r l; do echo "::error::$l"; done
+            df -h . | tail -1 | sed 's/^/::error::disk /'
             tail -40 build.log; exit $code
           fi
           set -e
