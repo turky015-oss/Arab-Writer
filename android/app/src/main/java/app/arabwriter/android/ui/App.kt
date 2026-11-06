@@ -122,7 +122,38 @@ object CrashLog {
             }
             previous?.uncaughtException(t, e)
         }
+        if (last == null) last = systemExit(app)
     }
+
+    /**
+     * أندرويد يحفظ سبب آخر إغلاق للتطبيق، حتى لو كان من داخل مكتبة أصلية (محرّك النموذج)
+     * أو لأن النظام قفله بسبب الذاكرة. نقرأه هنا ونعرضه مرة وحدة.
+     */
+    private fun systemExit(app: Application): String? = runCatching {
+        if (android.os.Build.VERSION.SDK_INT < 30) return@runCatching null
+        val am = app.getSystemService(android.app.ActivityManager::class.java)
+        val info = am.getHistoricalProcessExitReasons(app.packageName, 0, 1).firstOrNull() ?: return@runCatching null
+        val prefs = app.getSharedPreferences("crash", android.content.Context.MODE_PRIVATE)
+        if (info.timestamp <= prefs.getLong("seen", 0L)) return@runCatching null
+        prefs.edit().putLong("seen", info.timestamp).apply()
+        val reason = when (info.reason) {
+            android.app.ApplicationExitInfo.REASON_CRASH -> "CRASH"
+            android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "CRASH_NATIVE"
+            android.app.ApplicationExitInfo.REASON_ANR -> "ANR"
+            android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "LOW_MEMORY"
+            android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "EXCESSIVE_RESOURCE"
+            android.app.ApplicationExitInfo.REASON_SIGNALED -> "SIGNALED"
+            android.app.ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "INIT_FAILURE"
+            else -> return@runCatching null
+        }
+        val trace = runCatching { info.traceInputStream?.bufferedReader()?.readText() }.getOrNull().orEmpty()
+        val am2 = android.app.ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+        "Arab Writer ${app.packageManager.getPackageInfo(app.packageName, 0).versionName}\n" +
+            "Android ${android.os.Build.VERSION.RELEASE} · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n" +
+            "RAM ${am2.totalMem / 1_000_000} MB\n" +
+            "Exit: $reason · status ${info.status} · pss ${info.pss / 1024} MB · rss ${info.rss / 1024} MB\n" +
+            "Desc: ${info.description}\n\n" + trace.take(12000)
+    }.getOrNull()
 
     fun clear() { runCatching { file.delete() }; last = null }
 }

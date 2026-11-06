@@ -1,53 +1,46 @@
 import SwiftUI
 import AppKit
+import AudioToolbox
 
 // MARK: - الأصوات
 
-/// أصوات الواجهة من أصوات النظام الأصلية، بمستويات هادئة.
+/// أصوات الواجهة من أصوات النظام، عبر خدمة أصوات التنبيه الخفيفة
+/// (مشغّل الصوت العادي سبّب إغلاقاً في بعض الأجهزة).
 @MainActor
 enum SoundFX {
     case hover, tap, start, success, error, drop, copy, switchTab
 
-    private var spec: (name: String, volume: Float) {
+    private var file: String? {
         switch self {
-        case .hover: return ("Tink", 0.08)
-        case .tap: return ("Pop", 0.25)
-        case .start: return ("Morse", 0.22)
-        case .success: return ("Glass", 0.35)
-        case .error: return ("Funk", 0.35)
-        case .drop: return ("Hero", 0.3)
-        case .copy: return ("Tink", 0.3)
-        case .switchTab: return ("Pop", 0.12)
+        case .hover, .switchTab: return nil        // بلا صوت، تكفي الحركة
+        case .tap: return "Pop"
+        case .start: return "Morse"
+        case .success: return "Glass"
+        case .error: return "Funk"
+        case .drop: return "Hero"
+        case .copy: return "Tink"
         }
     }
 
-    private static var cache: [String: NSSound] = [:]
-    private static var lastHover = Date.distantPast
+    private static var ids: [String: SystemSoundID] = [:]
 
     static var enabled: Bool {
         UserDefaults.standard.object(forKey: "sounds") as? Bool ?? true
     }
 
     static func play(_ fx: SoundFX) {
-        guard enabled else { return }
-        if fx == .hover {
-            // لا تتكرر أصوات المرور بسرعة
-            guard Date().timeIntervalSince(lastHover) > 0.09 else { return }
-            lastHover = Date()
-        }
-        let s = fx.spec
-        let sound: NSSound
-        if let c = cache[s.name], !c.isPlaying {
-            sound = c
-        } else if let fresh = NSSound(named: NSSound.Name(s.name))?.copy() as? NSSound {
-            sound = fresh
-            cache[s.name] = fresh
-        } else { return }
-        sound.volume = s.volume
-        sound.play()
         if fx == .tap || fx == .success || fx == .drop {
             NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
         }
+        guard enabled, let name = fx.file else { return }
+        var id = ids[name] ?? 0
+        if id == 0 {
+            let url = URL(fileURLWithPath: "/System/Library/Sounds/\(name).aiff")
+            guard FileManager.default.fileExists(atPath: url.path),
+                  AudioServicesCreateSystemSoundID(url as CFURL, &id) == kAudioServicesNoError else { return }
+            ids[name] = id
+        }
+        AudioServicesPlaySystemSound(id)
     }
 }
 
