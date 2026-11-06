@@ -168,7 +168,8 @@ fun WordScreen() {
 
     fun refresh() {
         preview = doc?.text ?: plain ?: ""
-        report = ArabicLinter.check(preview, LintOptions(englishOnOwnLine = false))
+        val p = preview
+        scope.launch { report = lintAsync(p, LintOptions(englishOnOwnLine = false)) }
     }
 
     val open = rememberOpener { uris ->
@@ -288,6 +289,7 @@ fun SheetScreen() {
         else {
             val sheet = sheets[current.coerceIn(0, sheets.lastIndex)]
             val cols = sheet.columnCount
+            if (column >= cols) column = maxOf(0, cols - 1)
             val headers = (0 until cols).map { i -> (if (header) sheet.rows.firstOrNull()?.getOrNull(i) else null)?.takeIf { it.isNotBlank() } ?: SheetIO.colName(i) }
             val dataRange = (if (header) minOf(1, sheet.rows.size) else 0) until sheet.rows.size
             fun commit(f: (Sheet) -> Unit) { f(sheet); version++ }
@@ -491,7 +493,7 @@ fun PdfScreen() {
     fun select(i: Int) {
         active = i
         val f = files.getOrNull(i) ?: run { thumb = null; return }
-        thumb = if (f.isPdf) PdfTools.thumbnail(f.bytes) else BitmapFactory.decodeByteArray(f.bytes, 0, f.bytes.size)
+        thumb = runCatching { if (f.isPdf) PdfTools.thumbnail(f.bytes) else BitmapFactory.decodeByteArray(f.bytes, 0, f.bytes.size) }.getOrNull()
     }
 
     val open = rememberOpener { uris ->

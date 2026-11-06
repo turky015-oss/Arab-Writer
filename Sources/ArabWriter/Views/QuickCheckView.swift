@@ -84,9 +84,10 @@ struct QuickCheckView: View {
         .frame(width: 420)
         .task(id: text) {
             try? await Task.sleep(for: .milliseconds(200))
-            withAnimation(.smooth) {
-                report = ArabicLinter.check(text, options: LintOptions(englishOnOwnLine: settings.englishOnOwnLine))
-            }
+            let t = text
+            let opts = LintOptions(englishOnOwnLine: settings.englishOnOwnLine)
+            let r = await Task.detached(priority: .userInitiated) { ArabicLinter.check(t, options: opts) }.value
+            if !Task.isCancelled { withAnimation(.smooth) { report = r } }
         }
     }
 

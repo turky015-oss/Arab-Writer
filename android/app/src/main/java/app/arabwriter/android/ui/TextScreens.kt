@@ -103,6 +103,11 @@ import kotlinx.coroutines.launch
 
 // ---------- أدوات مشتركة ----------
 
+/** الفحص في الخلفية حتى لا يتجمد البرنامج مع النصوص الطويلة. */
+suspend fun lintAsync(text: String, opts: LintOptions): LintReport = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+    runCatching { ArabicLinter.check(text, opts) }.getOrElse { LintReport() }
+}
+
 fun copyText(ctx: Context, text: String) {
     (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Arab Writer", text))
 }
@@ -138,7 +143,7 @@ fun PlatformTile(p: Platform, selected: Boolean, modifier: Modifier, onClick: ()
     Column(
         modifier.heightIn(min = 96.dp).touchTilt(18.dp, tint, 9f).glass(18.dp, if (selected) tint else null)
             .then(if (selected) Modifier.background(tint.copy(alpha = 0.18f)) else Modifier)
-            .clickable { Feedback.tap(view); onClick() }.padding(8.dp),
+            .clickable { Feedback.tap(view); safely(onClick) }.padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
         Box {
@@ -156,7 +161,7 @@ fun PlatformTile(p: Platform, selected: Boolean, modifier: Modifier, onClick: ()
 
 @Composable
 fun SmallIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Icon(icon, label, Modifier.size(34.dp).clip(CircleShape).clickable { onClick() }.padding(8.dp), tint = secondaryText)
+    Icon(icon, label, Modifier.size(34.dp).clip(CircleShape).clickable { safely(onClick) }.padding(8.dp), tint = secondaryText)
 }
 
 @Composable
@@ -321,8 +326,8 @@ fun CheckerScreen() {
 
     LaunchedEffect(text, source, useSource, lock, words) {
         delay(220)
-        report = ArabicLinter.check(text, LintOptions(if (lock) words else null, null,
-            if (useSource && source.isNotBlank()) source else null, AppSettings.englishOnOwnLine))
+        val opts = LintOptions(if (lock) words else null, null, if (useSource && source.isNotBlank()) source else null, AppSettings.englishOnOwnLine)
+        report = lintAsync(text, opts)
     }
 
     SectionScroll {

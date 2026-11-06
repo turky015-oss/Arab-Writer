@@ -39,6 +39,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Movie
@@ -87,10 +89,35 @@ import app.arabwriter.android.service.SkillPrompt
 class ArabWriterApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
         AppSettings.init(this)
         SkillPrompt.init(this)
         PdfTools.init(this)
     }
+}
+
+/** يحفظ سبب أي إغلاق مفاجئ، ويعرضه في الرئيسية عند الفتح التالي. */
+object CrashLog {
+    private lateinit var file: java.io.File
+    var last by mutableStateOf<String?>(null)
+
+    fun install(app: Application) {
+        file = java.io.File(app.filesDir, "last-crash.txt")
+        last = runCatching { file.takeIf { it.exists() }?.readText() }.getOrNull()
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            runCatching {
+                val sw = java.io.StringWriter()
+                e.printStackTrace(java.io.PrintWriter(sw))
+                file.writeText("Arab Writer ${app.packageManager.getPackageInfo(app.packageName, 0).versionName}\n" +
+                    "Android ${android.os.Build.VERSION.RELEASE} · ${android.os.Build.MODEL}\n" +
+                    "Thread: ${t.name}\n\n" + sw.toString().take(12000))
+            }
+            previous?.uncaughtException(t, e)
+        }
+    }
+
+    fun clear() { runCatching { file.delete() }; last = null }
 }
 
 /** نص وصل من تطبيق آخر وينتظر قسم الكتابة. */
@@ -218,12 +245,30 @@ private fun Home(onOpen: (AppSection) -> Unit, onSettings: () -> Unit) {
         }
 
         KeyBadge(onSettings)
+        CrashLog.last?.let { log -> CrashCard(log) }
 
         val textItems = AppSection.text.filter(::match)
         val fileItems = AppSection.files.filter(::match)
         if (textItems.isNotEmpty()) { SectionLabel("النص"); SectionGrid(textItems, onOpen) }
         if (fileItems.isNotEmpty()) { SectionLabel("الملفات"); SectionGrid(fileItems, onOpen) }
         if (textItems.isEmpty() && fileItems.isEmpty()) Text("ما فيه قسم بهذا الاسم", color = secondaryText)
+    }
+}
+
+@Composable
+private fun CrashCard(log: String) {
+    val ctx = LocalContext.current
+    GlassPanel(tint = AW.Pink) {
+        SectionLabel("البرنامج انقفل آخر مرة")
+        Spacer(Modifier.size(6.dp))
+        Text("انسخ التقرير وأرسله للمطوّر حتى يُصلح السبب.", fontSize = 14.sp)
+        Spacer(Modifier.size(6.dp))
+        Text(log.lines().take(6).joinToString("\n"), fontSize = 11.sp, color = secondaryText, maxLines = 6)
+        Spacer(Modifier.size(10.dp))
+        TileRow { m ->
+            ActionTile("انسخ التقرير", Icons.Rounded.ContentCopy, AW.Pink, m) { copyText(ctx, log); Toasts.show("نُسخ التقرير") }
+            ActionTile("تجاهل", Icons.Rounded.Close, AW.Gray, m) { CrashLog.clear() }
+        }
     }
 }
 

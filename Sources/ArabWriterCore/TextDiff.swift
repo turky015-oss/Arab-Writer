@@ -15,6 +15,12 @@ public enum TextDiff {
         let wb = b.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         let n = wa.count, m = wb.count
         if n == 0 && m == 0 { return ([], 100) }
+        if n * m > 2_500_000 {
+            // نص طويل جداً: مقارنة تقريبية بدل جدول ضخم يستهلك الذاكرة
+            let sa = Set(wa), sb = Set(wb)
+            let sim = Int((2.0 * Double(sa.intersection(sb).count) / Double(max(sa.count + sb.count, 1)) * 100).rounded())
+            return ([DiffChange(op: .replace, before: "النص طويل، والمقارنة كلمة بكلمة متاحة للنصوص الأقصر", after: "")], sim)
+        }
         var dp = Array(repeating: Array(repeating: 0, count: m + 1), count: n + 1)
         if n > 0 && m > 0 {
             for i in stride(from: n - 1, through: 0, by: -1) {

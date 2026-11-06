@@ -95,7 +95,7 @@ private fun QuickCheckSheet(initial: String, canReplace: Boolean, onReplace: (St
 
     LaunchedEffect(text) {
         delay(180)
-        report = ArabicLinter.check(text, LintOptions(englishOnOwnLine = AppSettings.englishOnOwnLine))
+        report = lintAsync(text, LintOptions(englishOnOwnLine = AppSettings.englishOnOwnLine))
     }
 
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).clickable(onClick = onDismiss), contentAlignment = Alignment.BottomCenter) {

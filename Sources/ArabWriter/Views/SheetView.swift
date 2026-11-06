@@ -38,9 +38,14 @@ struct SheetView: View {
         }
         .scrollContentBackground(.hidden)
         .toast($toast)
+        .onChange(of: current) { column = 0; calc = nil }
+        .onChange(of: sheets) {
+            if !sheets.indices.contains(current) { current = 0 }
+            if sheets.indices.contains(current), column >= max(sheets[current].columnCount, 1) { column = max(sheets[current].columnCount - 1, 0) }
+        }
     }
 
-    private var sheet: Sheet { sheets[current] }
+    private var sheet: Sheet { sheets.indices.contains(current) ? sheets[current] : Sheet(name: "", rows: []) }
     private var headers: [String] {
         (0..<sheet.columnCount).map { i in
             let h = headerRow ? (sheet.rows.first?[i] ?? "") : ""
@@ -144,13 +149,20 @@ struct SheetView: View {
 
     private func cell(_ r: Int, _ c: Int) -> Binding<String> {
         Binding(
-            get: { sheets[current].rows[r].indices.contains(c) ? sheets[current].rows[r][c] : "" },
+            get: {
+                guard sheets.indices.contains(current), sheets[current].rows.indices.contains(r),
+                      sheets[current].rows[r].indices.contains(c) else { return "" }
+                return sheets[current].rows[r][c]
+            },
             set: { v in
+                guard sheets.indices.contains(current), sheets[current].rows.indices.contains(r) else { return }
                 while sheets[current].rows[r].count <= c { sheets[current].rows[r].append("") }
                 sheets[current].rows[r][c] = v
             }
         )
     }
+
+    private func header(_ i: Int) -> String { headers.indices.contains(i) ? headers[i] : SheetService.colName(i) }
 
     // MARK: الأدوات
 
@@ -161,7 +173,7 @@ struct SheetView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     SectionLabel(text: "العمود المحدد", symbol: "rectangle.split.3x1")
                     Picker("", selection: $column) {
-                        ForEach(0..<sheet.columnCount, id: \.self) { Text(headers[$0]).tag($0) }
+                        ForEach(0..<sheet.columnCount, id: \.self) { Text(header($0)).tag($0) }
                     }
                     .labelsHidden()
                     GlassEffectContainer(spacing: 8) {
@@ -252,7 +264,7 @@ struct SheetView: View {
 
     private func aggregate(_ name: String, _ f: ([Double]) -> Double) {
         let ns = numbers()
-        guard !ns.isEmpty else { toast = Toast(text: "العمود «\(headers[column])» ما فيه أرقام", isError: true); return }
+        guard !ns.isEmpty else { toast = Toast(text: "العمود «\(header(column))» ما فيه أرقام", isError: true); return }
         calc = "\(name): \(SheetService.format(f(ns)))"
     }
 
@@ -264,7 +276,7 @@ struct SheetView: View {
                 sheets[current].rows[r][column] = SheetService.format(f(v, k)); n += 1
             }
         }
-        toast = Toast(text: "عُدّلت \(n) خلية في «\(headers[column])»")
+        toast = Toast(text: "عُدّلت \(n) خلية في «\(header(column))»")
     }
 
     private func sort(asc: Bool) {
@@ -278,7 +290,7 @@ struct SheetView: View {
             return asc ? o == .orderedAscending : o == .orderedDescending
         }
         sheets[current].rows = head + rest
-        toast = Toast(text: "رُتّب حسب «\(headers[c])»")
+        toast = Toast(text: "رُتّب حسب «\(header(c))»")
     }
 
     private func trim() {

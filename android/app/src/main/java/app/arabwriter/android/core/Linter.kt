@@ -76,7 +76,7 @@ object ArabicLinter {
     private const val PRE = "[وف]?(?:بال|كال|لل|ال|[بكل])?"
     const val EMOJI = "[\\x{1F300}-\\x{1FAFF}\\x{2600}-\\x{27BF}\\x{1F000}-\\x{1F2FF}\\x{2B00}-\\x{2BFF}\\x{FE0F}\\x{200D}✅❌✔✖]"
     private const val DASH = "[—–‒―]|--"
-    private const val EN_CHUNK = "[A-Za-z][A-Za-z0-9.+#'&/-]*(?:\\s+[A-Za-z0-9.+#'&/-]+)*"
+    private const val EN_CHUNK = "[A-Za-z](?:[A-Za-z0-9.+#'&/\\- \\t]*[A-Za-z0-9.+#'&/-])?"
 
     fun stripDiacritics(s: String) = RX.replace("[\\u064B-\\u0652\\u0670\\u0640]", s, "")
 
@@ -309,6 +309,12 @@ object TextDiff {
         val wb = b.split(Regex("\\s+")).filter { it.isNotEmpty() }
         val n = wa.size; val m = wb.size
         if (n == 0 && m == 0) return emptyList<DiffChange>() to 100
+        if (n.toLong() * m > 2_500_000L) {
+            // نص طويل جداً: مقارنة تقريبية بدل جدول ضخم يستهلك الذاكرة
+            val common = wa.toSet().intersect(wb.toSet()).size
+            val sim = Math.round(2.0 * common / (wa.toSet().size + wb.toSet().size).coerceAtLeast(1) * 100).toInt()
+            return listOf(DiffChange(DiffChange.Op.REPLACE, "النص طويل، والمقارنة كلمة بكلمة متاحة للنصوص الأقصر", "")) to sim
+        }
         val dp = Array(n + 1) { IntArray(m + 1) }
         for (i in n - 1 downTo 0) for (j in m - 1 downTo 0)
             dp[i][j] = if (wa[i] == wb[j]) dp[i + 1][j + 1] + 1 else maxOf(dp[i + 1][j], dp[i][j + 1])

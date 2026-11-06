@@ -40,4 +40,17 @@ final class LinterTests: XCTestCase {
         XCTAssertEqual(d.changes.count, 1)
         XCTAssertEqual(d.changes.first?.op, .replace)
     }
+
+    func testLongInputs() {
+        let en = (1...4000).map { "word\($0)" }.joined(separator: " ")
+        _ = ArabicLinter.check("نص عربي \(en) نهاية")
+        _ = ArabicLinter.fix("نص عربي \(en) نهاية")
+        let ar = Array(repeating: "كلمة", count: 3000).joined(separator: " ")
+        let d = TextDiff.compare(ar, ar + " أخرى")
+        XCTAssertFalse(d.changes.isEmpty)
+    }
+
+    func testOddInputs() {
+        for s in ["", " ", "\n\n", "؟؟؟", "!!!", "١٢٣", "a", "ـــ"] { _ = ArabicLinter.check(s); _ = ArabicLinter.fix(s) }
+    }
 }

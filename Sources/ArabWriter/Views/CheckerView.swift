@@ -100,7 +100,9 @@ struct CheckerView: View {
             let opts = LintOptions(wordsTarget: lockWords ? words : nil,
                                    source: useSource && !source.isEmpty ? source : nil,
                                    englishOnOwnLine: settings.englishOnOwnLine)
-            withAnimation(.smooth) { report = ArabicLinter.check(text, options: opts) }
+            let t = text
+            let r = await Task.detached(priority: .userInitiated) { ArabicLinter.check(t, options: opts) }.value
+            if !Task.isCancelled { withAnimation(.smooth) { report = r } }
         }
     }
 

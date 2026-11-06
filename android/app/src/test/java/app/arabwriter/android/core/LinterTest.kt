@@ -53,4 +53,19 @@ class LinterTest {
         assertEquals(1, changes.size)
         assertEquals(DiffChange.Op.REPLACE, changes.first().op)
     }
+
+    @Test fun longEnglishDoesNotOverflow() {
+        val en = (1..4000).joinToString(" ") { "word$it" }
+        ArabicLinter.check("نص عربي $en نهاية")
+        ArabicLinter.fix("نص عربي $en نهاية")
+    }
+
+    @Test fun longArabicIsFine() {
+        val t = (1..3000).joinToString(" ") { "كلمة" } + "."
+        assertTrue(ArabicLinter.check(t).stats.words >= 3000)
+    }
+
+    @Test fun emptyAndOddInputs() {
+        listOf("", " ", "\n\n", "؟؟؟", "!!!", "١٢٣", "a", "ـــ").forEach { ArabicLinter.check(it); ArabicLinter.fix(it); ArabicLinter.fixInline(it) }
+    }
 }

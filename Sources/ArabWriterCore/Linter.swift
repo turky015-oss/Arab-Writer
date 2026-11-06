@@ -57,8 +57,8 @@ enum RX {
         let key = "\(opts.rawValue)|\(pattern)"
         lock.lock(); defer { lock.unlock() }
         if let r = cache[key] { return r }
-        // الأنماط ثابتة ومختبرة؛ أي فشل هنا خطأ برمجي.
-        let r = try! NSRegularExpression(pattern: pattern, options: opts)
+        // لو فشل نمط لأي سبب، نرجع نمطاً لا يطابق شيئاً بدل إغلاق البرنامج.
+        let r = (try? NSRegularExpression(pattern: pattern, options: opts)) ?? (try! NSRegularExpression(pattern: "(?!)"))
         cache[key] = r
         return r
     }

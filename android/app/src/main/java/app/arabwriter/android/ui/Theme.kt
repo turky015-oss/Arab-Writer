@@ -148,6 +148,14 @@ object Feedback {
     }
 }
 
+/** ينفّذ الفعل، وأي خطأ يطلع رسالة بدل إغلاق البرنامج. */
+fun safely(block: () -> Unit) {
+    try { block() } catch (e: Throwable) {
+        if (e is VirtualMachineError && e !is StackOverflowError) throw e
+        Toasts.show(e.message?.takeIf { it.isNotBlank() } ?: "حدث خطأ غير متوقع", true)
+    }
+}
+
 // ---------- الخلفية الحيّة ----------
 
 @Composable
@@ -313,7 +321,7 @@ fun ActionTile(
             .touchTilt(18.dp, if (selected) Color.White else tint, 9f)
             .glass(18.dp, tint, selected)
             .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                Feedback.tap(view); onClick()
+                Feedback.tap(view); safely(onClick)
             }
             .padding(horizontal = 6.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
@@ -396,7 +404,7 @@ fun PrimaryButton(text: String, icon: ImageVector, tint: Color, enabled: Boolean
             .clip(RoundedCornerShape(28.dp))
             .background(Brush.verticalGradient(listOf(tint, tint.copy(alpha = 0.82f))))
             .border(1.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(28.dp))
-            .clickable(enabled = enabled && !working) { Feedback.tap(view); onClick() }
+            .clickable(enabled = enabled && !working) { Feedback.tap(view); safely(onClick) }
             .padding(horizontal = 26.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
     ) {
