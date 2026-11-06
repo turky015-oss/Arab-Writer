@@ -96,10 +96,6 @@ class ArabWriterApp : Application() {
         AppSettings.init(this)
         SkillPrompt.init(this)
         PdfTools.init(this)
-        // تجهيز النموذج الداخلي في الخلفية أول مرة (نسخه من ملف التثبيت)
-        if (LocalModel.isAvailable) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            runCatching { LocalModel.prepare() }
-        }
     }
 }
 
@@ -235,7 +231,7 @@ fun AppRoot() {
                 }
             }
         }
-        LocalModel.status?.let { st ->
+        LocalModel.status?.takeIf { LocalModel.progress == null || section != null }?.let { st ->
             Row(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 60.dp).glass(20.dp, AW.Purple)
                 .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), color = AW.Purple, strokeWidth = 2.dp)
@@ -291,6 +287,7 @@ private fun Home(onOpen: (AppSection) -> Unit, onSettings: () -> Unit) {
         }
 
         KeyBadge(onSettings)
+        if (!LocalModel.ready && AppSettings.engine == "local") ModelCard()
         CrashLog.last?.let { log -> CrashCard(log) }
 
         val textItems = AppSection.text.filter(::match)
@@ -298,6 +295,34 @@ private fun Home(onOpen: (AppSection) -> Unit, onSettings: () -> Unit) {
         if (textItems.isNotEmpty()) { SectionLabel("النص"); SectionGrid(textItems, onOpen) }
         if (fileItems.isNotEmpty()) { SectionLabel("الملفات"); SectionGrid(fileItems, onOpen) }
         if (textItems.isEmpty() && fileItems.isEmpty()) Text("ما فيه قسم بهذا الاسم", color = secondaryText)
+    }
+}
+
+@Composable
+fun ModelCard() {
+    GlassPanel(tint = AW.Purple) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconSquare(Icons.Rounded.AutoAwesome, AW.Purple, 40.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("النموذج الداخلي", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("نزّله مرة وحدة، وبعدها الصياغة والترجمة والقصة تشتغل بدون إنترنت.", fontSize = 12.sp, color = secondaryText)
+            }
+        }
+        Spacer(Modifier.size(12.dp))
+        val p = LocalModel.progress
+        if (p != null) {
+            androidx.compose.material3.LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth().clip(CircleShape),
+                color = AW.Purple, trackColor = AW.Purple.copy(alpha = 0.15f))
+            Spacer(Modifier.size(6.dp))
+            Text(LocalModel.status ?: "", fontSize = 12.sp, color = secondaryText)
+        } else {
+            PrimaryButton("نزّل النموذج (١٫٦ قيقا)", Icons.Rounded.AutoAwesome, AW.Purple, true, modifier = Modifier.fillMaxWidth()) {
+                LocalModel.startDownload()
+            }
+            Spacer(Modifier.size(6.dp))
+            Text("يفضّل على واي فاي. ولو انقطع يكمل من حيث وقف.", fontSize = 11.sp, color = secondaryText)
+        }
     }
 }
 
@@ -378,12 +403,13 @@ private fun SettingsScreen() {
             }
             Spacer(Modifier.size(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(9.dp).clip(CircleShape).background(if (LocalModel.isAvailable) AW.Green else AW.Orange))
+                Box(Modifier.size(9.dp).clip(CircleShape).background(if (LocalModel.ready) AW.Green else AW.Orange))
                 Spacer(Modifier.width(8.dp))
-                Text(if (LocalModel.isAvailable) "النموذج الداخلي موجود: Qwen2.5 بمليار ونصف معامل" else "النموذج الداخلي غير موجود في هذه النسخة", fontSize = 13.sp)
+                Text(if (LocalModel.ready) "النموذج الداخلي جاهز: Qwen2.5 بمليار ونصف معامل" else "النموذج الداخلي ما نزل للحين", fontSize = 13.sp)
             }
             if (AppSettings.engine == "claude" && !AppSettings.hasKey)
                 Text("ما فيه مفتاح، فالبرنامج يستخدم الداخلي لين تضيف مفتاحك.", fontSize = 12.sp, color = secondaryText)
+            if (!LocalModel.ready) { Spacer(Modifier.size(8.dp)); ModelCard() }
             Spacer(Modifier.size(6.dp))
             Text("الداخلي يشتغل بالكامل على جوالك ولا يطلع منه أي نص، لكنه أبطأ وأقل دقة. Claude أدق ويحتاج إنترنت ومفتاحاً.",
                 fontSize = 12.sp, color = secondaryText)

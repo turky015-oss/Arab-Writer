@@ -9,67 +9,107 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import java.io.File
 
-/** نموذج لغوي داخل الجوال (Qwen2.5-1.5B عبر MediaPipe)، بلا إنترنت. */
+/** نموذج لغوي داخل الجوال (Qwen2.5-1.5B عبر MediaPipe). ينزل مرة وحدة، ثم يشتغل بلا إنترنت. */
 object LocalModel {
-    private const val ASSET = "model/qwen.task"
+    private const val URL_MODEL = "https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.task"
+    const val SIZE = 1_598_556_720L
     private lateinit var appCtx: Context
     private val lock = Mutex()
     private var llm: LlmInference? = null
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
 
     /** حالة التجهيز لعرضها في الواجهة، أو null إذا كان جاهزاً أو غير مستخدم. */
     var status by mutableStateOf<String?>(null)
+    /** نسبة التنزيل من 0 إلى 1 أثناء التنزيل. */
+    var progress by mutableStateOf<Float?>(null)
+    var ready by mutableStateOf(false); private set
 
-    fun init(ctx: Context) { appCtx = ctx.applicationContext }
-
-    val isAvailable: Boolean by lazy {
-        runCatching { appCtx.assets.list("model")?.contains("qwen.task") == true }.getOrDefault(false)
+    fun init(ctx: Context) {
+        appCtx = ctx.applicationContext
+        ready = file.exists() && file.length() == SIZE
     }
+
+    /** المحرّك الداخلي متاح دائماً، وينزل نموذجه عند أول حاجة. */
+    val isAvailable: Boolean get() = true
 
     private val file get() = File(appCtx.filesDir, "model/qwen.task")
 
-    private fun assetLength(): Long = runCatching { appCtx.assets.openFd(ASSET).use { it.length } }.getOrDefault(-1L)
+    /** يبدأ التنزيل في الخلفية (يكمل من حيث وقف). */
+    fun startDownload() {
+        if (ready || progress != null) return
+        scope.launch { runCatching { prepare() }.onFailure { withContext(Dispatchers.Main) { status = null; progress = null } } }
+    }
 
-    /** ينسخ النموذج من ملف التثبيت إلى ذاكرة الجوال مرة وحدة (مكتبة التشغيل تحتاج مساراً عادياً). */
+    /** ينزّل النموذج مرة وحدة، ويكمل التنزيل المنقطع. */
     suspend fun prepare() = withContext(Dispatchers.IO) {
-        if (!isAvailable) return@withContext
         lock.withLock {
             val f = file
-            val total = assetLength()
-            if (f.exists() && (total <= 0 || f.length() == total)) return@withLock
+            if (f.exists() && f.length() == SIZE) { withContext(Dispatchers.Main) { ready = true }; return@withLock }
             f.parentFile?.mkdirs()
-            val tmp = File(f.parentFile, "qwen.task.part")
+            val free = f.parentFile?.usableSpace ?: 0L
+            val part = File(f.parentFile, "qwen.task.part")
+            if (free < SIZE - part.length() + 200_000_000L)
+                throw ToolException("المساحة ما تكفي لتنزيل النموذج الداخلي. يحتاج ١٫٧ قيقا فاضية.")
             try {
-                appCtx.assets.open(ASSET).use { input ->
-                    tmp.outputStream().use { out ->
-                        val buf = ByteArray(1 shl 20)
-                        var done = 0L
-                        var lastPct = -1
-                        while (true) {
-                            val n = input.read(buf)
-                            if (n < 0) break
-                            out.write(buf, 0, n)
-                            done += n
-                            if (total > 0) {
-                                val pct = (done * 100 / total).toInt()
-                                if (pct != lastPct) { lastPct = pct; withContext(Dispatchers.Main) { status = "يجهّز النموذج الداخلي أول مرة… $pct٪" } }
-                            }
+                var attempt = 0
+                while (part.length() < SIZE) {
+                    try {
+                        download(part)
+                    } catch (e: java.io.IOException) {
+                        if (++attempt >= 5) throw ToolException("انقطع التنزيل. تأكد من الإنترنت وجرّب مرة ثانية، وبيكمل من حيث وقف.")
+                        kotlinx.coroutines.delay(3000L * attempt)
+                    }
+                }
+                if (part.length() != SIZE) { part.delete(); throw ToolException("الملف نزل ناقص. جرّب مرة ثانية.") }
+                if (!part.renameTo(f)) throw ToolException("تعذّر حفظ النموذج.")
+                withContext(Dispatchers.Main) { ready = true }
+            } finally {
+                withContext(Dispatchers.Main) { status = null; progress = null }
+            }
+        }
+    }
+
+    private suspend fun download(part: File) {
+        val have = part.length()
+        val c = java.net.URL(URL_MODEL).openConnection() as java.net.HttpURLConnection
+        c.instanceFollowRedirects = true
+        c.connectTimeout = 30_000
+        c.readTimeout = 60_000
+        if (have > 0) c.setRequestProperty("Range", "bytes=$have-")
+        val code = c.responseCode
+        if (code != 200 && code != 206) throw java.io.IOException("HTTP $code")
+        val append = code == 206
+        if (!append && have > 0) part.delete()
+        var done = if (append) have else 0L
+        var lastPct = -1
+        c.inputStream.use { input ->
+            java.io.FileOutputStream(part, append).use { out ->
+                val buf = ByteArray(1 shl 20)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                    done += n
+                    val pct = (done * 100 / SIZE).toInt()
+                    if (pct != lastPct) {
+                        lastPct = pct
+                        val mb = done / 1_000_000
+                        withContext(Dispatchers.Main) {
+                            progress = done.toFloat() / SIZE
+                            status = "ينزّل النموذج الداخلي… $pct٪ ($mb من ${SIZE / 1_000_000} ميقا)"
                         }
                     }
                 }
-                if (!tmp.renameTo(f)) throw ToolException("تعذّر تجهيز النموذج الداخلي.")
-            } catch (e: Exception) {
-                tmp.delete()
-                throw ToolException(if (e.message?.contains("ENOSPC") == true) "المساحة ما تكفي لتجهيز النموذج الداخلي (يحتاج ٢ قيقا تقريباً)." else e.message ?: "تعذّر تجهيز النموذج.")
-            } finally {
-                withContext(Dispatchers.Main) { status = null }
             }
         }
     }
 
     private suspend fun engine(): LlmInference {
         llm?.let { return it }
+        if (!ready) withContext(Dispatchers.Main) { status = "يبدأ تنزيل النموذج الداخلي أول مرة…" }
         prepare()
         return lock.withLock {
             llm ?: withContext(Dispatchers.IO) {
