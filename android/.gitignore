@@ -5,3 +5,4 @@ local.properties
 !signing/test.jks
 *.keystore
 .idea/
+app/src/main/assets/model/

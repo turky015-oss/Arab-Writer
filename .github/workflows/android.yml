@@ -49,29 +49,44 @@ jobs:
       - name: Tests
         run: gradle :app:testReleaseUnitTest --stacktrace
 
+      - name: Model cache
+        uses: actions/cache@v4
+        with:
+          path: android/app/src/main/assets/model
+          key: litert-qwen2.5-1.5b-q8-ekv4096-v1
+
+      - name: Fetch model
+        run: |
+          mkdir -p app/src/main/assets/model
+          if [ ! -s app/src/main/assets/model/qwen.task ]; then
+            curl -fL --retry 4 -o app/src/main/assets/model/qwen.task \
+              "https://huggingface.co/litert-community/Qwen2.5-1.5B-Instruct/resolve/main/Qwen2.5-1.5B-Instruct_multi-prefill-seq_q8_ekv4096.task"
+          fi
+          ls -la app/src/main/assets/model
+
       - name: Build APK
         run: |
-          gradle :app:assembleRelease --stacktrace
+          set +e
+          gradle :app:assembleRelease --stacktrace > build.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            grep -E "^e: |error:|What went wrong|Could not" build.log | sort -u | head -30 | while IFS= read -r l; do echo "::error::$l"; done
+            tail -40 build.log; exit $code
+          fi
+          set -e
           mkdir -p ../dist-android
           cp app/build/outputs/apk/release/app-release.apk "../dist-android/Arab-Writer-$AW_VERSION.apk"
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Arab-Writer-android
-          path: dist-android/*.apk
-
-      - name: Test build branch
+      - name: Test release
         if: github.ref == 'refs/heads/mac-app'
-        working-directory: dist-android
-        run: |
-          cp *.apk /tmp/Arab-Writer.apk
-          mkdir -p /tmp/out && cd /tmp/out && mv /tmp/Arab-Writer.apk .
-          git init -q -b android-build
-          git config user.name "github-actions"
-          git config user.email "github-actions@users.noreply.github.com"
-          git add Arab-Writer.apk
-          git commit -qm "android test build ${GITHUB_SHA::7}"
-          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" android-build
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test-android
+          name: "نسخة تجربة · أندرويد"
+          prerelease: true
+          make_latest: false
+          body: "نسخة تجربة للأندرويد مع النموذج الداخلي. ليست إصداراً نهائياً."
+          files: dist-android/*.apk
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')

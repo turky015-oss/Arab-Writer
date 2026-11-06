@@ -196,7 +196,7 @@ fun WriterScreen() {
         scope.launch {
             try {
                 result = WritingEngine.run(WriteRequest(input, mode, register, platform, if (lock) words else null)) { live = it }
-                if (!AppSettings.hasKey) Toasts.show("أصلحتُ الآمن آلياً. أضف مفتاحك لإعادة الصياغة الكاملة")
+                if (!AppSettings.aiAvailable) Toasts.show("أصلحتُ الآمن آلياً. أضف مفتاحك لإعادة الصياغة الكاملة")
             } catch (e: Exception) { Toasts.show(e.message ?: "تعذّر التنفيذ", true) }
             working = false; live = ""
         }
@@ -409,8 +409,8 @@ fun TranslateScreen() {
             }
             ArabicEditor(input, { input = it }, "الصق النص بأي لغة من الاثنتين…", minHeight = 150.dp)
         }
-        if (!AppSettings.hasKey) Notice("الترجمة تحتاج مفتاح Claude. أضفه من الإعدادات")
-        PrimaryButton(if (working) "يترجم…" else "ترجم", Icons.Rounded.Translate, AW.Teal, input.isNotBlank() && AppSettings.hasKey, working, Modifier.fillMaxWidth()) {
+        if (!AppSettings.aiAvailable) Notice("الترجمة تحتاج المحرّك الذكي. أضف مفتاح Claude من الإعدادات")
+        PrimaryButton(if (working) "يترجم…" else "ترجم", Icons.Rounded.Translate, AW.Teal, input.isNotBlank() && AppSettings.aiAvailable, working, Modifier.fillMaxWidth()) {
             working = true; live = ""
             scope.launch {
                 try { result = WritingEngine.translate(input, dir, register) { live = it } }
@@ -467,8 +467,8 @@ fun StoryScreen() {
             Spacer(Modifier.height(8.dp))
             Text("${length.range} كلمة", fontSize = 12.sp, color = secondaryText)
         }
-        if (!AppSettings.hasKey) Notice("القصة تحتاج مفتاح Claude. أضفه من الإعدادات")
-        PrimaryButton(if (working) "يكتب…" else "اكتب القصة", Icons.Rounded.AutoAwesome, AW.Purple, title.isNotBlank() && AppSettings.hasKey, working, Modifier.fillMaxWidth()) {
+        if (!AppSettings.aiAvailable) Notice("القصة تحتاج المحرّك الذكي. أضف مفتاح Claude من الإعدادات")
+        PrimaryButton(if (working) "يكتب…" else "اكتب القصة", Icons.Rounded.AutoAwesome, AW.Purple, title.isNotBlank() && AppSettings.aiAvailable, working, Modifier.fillMaxWidth()) {
             working = true; live = ""
             scope.launch {
                 try { result = WritingEngine.story(title, length, register) { live = it } }
@@ -542,9 +542,9 @@ fun VideoScreen() {
             Spacer(Modifier.height(12.dp)); SectionLabel("البطل"); Spacer(Modifier.height(8.dp))
             TileChoice(heroes.indices.toList(), hero, AW.Green, { heroes[it].second }, { Icons.Rounded.DirectionsWalk }) { hero = it }
         }
-        if (!AppSettings.hasKey) Notice("الفيديو يحتاج مفتاح Claude. أضفه من الإعدادات")
+        if (!AppSettings.aiAvailable) Notice("الفيديو يحتاج المحرّك الذكي. أضف مفتاح Claude من الإعدادات")
         PrimaryButton(if (working) progress.ifEmpty { "يجهّز…" } else "جهّز الحزمة", Icons.Rounded.Movie, AW.Orange,
-            input.isNotBlank() && AppSettings.hasKey, working, Modifier.fillMaxWidth()) {
+            input.isNotBlank() && AppSettings.aiAvailable, working, Modifier.fillMaxWidth()) {
             working = true; progress = ""
             scope.launch {
                 try {

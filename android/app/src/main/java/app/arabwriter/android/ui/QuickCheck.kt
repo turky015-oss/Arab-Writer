@@ -131,7 +131,7 @@ private fun QuickCheckSheet(initial: String, canReplace: Boolean, onReplace: (St
                 ActionTile("صحّح", Icons.Rounded.Healing, AW.Green, m, enabled = text.isNotEmpty()) {
                     text = ArabicLinter.fix(text, AppSettings.englishOnOwnLine); Toasts.show("صُحّح الآمن")
                 }
-                ActionTile(if (working) "يصيغ…" else "صغ", Icons.Rounded.AutoAwesome, AW.Purple, m, enabled = text.isNotEmpty() && !working && AppSettings.hasKey) {
+                ActionTile(if (working) "يصيغ…" else "صغ", Icons.Rounded.AutoAwesome, AW.Purple, m, enabled = text.isNotEmpty() && !working && AppSettings.aiAvailable) {
                     working = true
                     scope.launch {
                         try { text = WritingEngine.run(WriteRequest(text, WriteMode.REWRITE, Register.KEEP, Platform.NONE, null)) { text = it }.text }
@@ -143,7 +143,15 @@ private fun QuickCheckSheet(initial: String, canReplace: Boolean, onReplace: (St
                 else ActionTile("انسخ", Icons.Rounded.ContentCopy, AW.Indigo, m, enabled = text.isNotEmpty()) { copyText(ctx, text); Toasts.show("نُسخ") }
             }
         }
+        LocalModel_status()
         ToastHost()
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.LocalModel_status() {
+    app.arabwriter.android.service.LocalModel.status?.let { st ->
+        Text(st, Modifier.align(Alignment.TopCenter).padding(top = 40.dp).glass(18.dp, AW.Purple).padding(horizontal = 14.dp, vertical = 8.dp), fontSize = 13.sp)
     }
 }
 

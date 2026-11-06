@@ -35,6 +35,13 @@ object SkillPrompt {
     private fun join(vararg names: String) = (listOf(APP_RULES) + names.map { load(it) })
         .filter { it.isNotBlank() }.joinToString("\n\n---\n\n")
 
+    enum class Kind { WRITING, STORY, SUMMARY }
+
+    /** التعليمات المناسبة للمحرّك: كاملة لـ Claude، ومختصرة للنموذج الداخلي. */
+    fun pick(kind: Kind, e: TextEngine): String = if (e.isLocal) when (kind) {
+        Kind.WRITING -> LocalPrompt.BASE; Kind.STORY -> LocalPrompt.STORY; Kind.SUMMARY -> LocalPrompt.SUMMARY
+    } else when (kind) { Kind.WRITING -> writing; Kind.STORY -> story; Kind.SUMMARY -> summary }
+
     val writing get() = join("SKILL", "ai-markers-arabic", "structures", "voice", "arabic-proofreading",
         "arabic-dictionary", "platforms", "english-markers")
     val story get() = join("storytelling", "ai-markers-arabic", "structures", "voice", "arabic-proofreading")
@@ -159,7 +166,10 @@ object WritingEngine {
             Register.SAUDI -> "السجل: لهجة سعودية طبيعية."
             Register.FUSHA -> "السجل: فصحى سهلة."
         })
-        if (r.platform != Platform.NONE) appendLine("المنصة: ${r.platform.label}. طبّق قالبها.")
+        if (r.platform != Platform.NONE) {
+            appendLine("المنصة: ${r.platform.label}. طبّق قالبها.")
+            LocalPrompt.platforms[r.platform]?.let { appendLine(it) }
+        }
         r.words?.let { appendLine("قفل الطول: $it كلمة بهامش 10%.") }
         appendLine(if (en) "كل كلمة إنجليزية في سطر مستقل وحدها." else "اترك الكلمات الإنجليزية في مكانها داخل السطر.")
         append("\nالنص:\n${r.text}")
@@ -170,14 +180,14 @@ object WritingEngine {
         val source = if (r.mode == WriteMode.WRITE) null else r.text
         val opts = LintOptions(wordsTarget = r.words, source = source, englishOnOwnLine = en)
 
-        if (!AppSettings.hasKey) {
+        if (!AppSettings.aiAvailable) {
             val out = ArabicLinter.fix(r.text, en)
             val (ch, sim) = TextDiff.compare(r.text, out)
             return WriteResult(out, null, ArabicLinter.check(out, opts.copy(source = r.text)), ch, sim, usedAI = false)
         }
 
         val client = AppSettings.client()
-        val system = SkillPrompt.writing
+        val system = SkillPrompt.pick(SkillPrompt.Kind.WRITING, client)
         val user = instruction(r, en)
         val raw = if (onPartial != null) client.stream(system, user) { onPartial(splitQuestion(it).first) }
                   else client.complete(system, user)
@@ -189,6 +199,7 @@ object WritingEngine {
             val list = report.errors.take(20).joinToString("\n") { "- [${it.kind}] ${it.message}" }
             val ask = "هذا نصك بعد الفحص الآلي، وفيه أخطاء مانعة. أصلحها كلها وأرجع النص النهائي وحده.\nالأخطاء:\n$list\n\nالنص:\n$draft"
             val (d2, q2) = splitQuestion(client.complete(system, ask))
+                .let { if (client.isLocal) it.first.ifBlank { draft } to it.second else it }
             val fixed = ArabicLinter.fix(d2, en)
             val r2 = ArabicLinter.check(fixed, opts)
             if (r2.errors.size <= report.errors.size) { draft = fixed; report = r2; question = q2 ?: question }
@@ -208,7 +219,8 @@ object WritingEngine {
 
             العنوان: $title
         """.trimIndent()
-        val raw = if (onPartial != null) client.stream(SkillPrompt.story, ask, onText = onPartial) else client.complete(SkillPrompt.story, ask)
+        val sys = SkillPrompt.pick(SkillPrompt.Kind.STORY, client)
+        val raw = if (onPartial != null) client.stream(sys, ask, onText = onPartial) else client.complete(sys, ask)
         val (draft, q) = splitQuestion(raw)
         val out = ArabicLinter.fix(draft, en)
         return WriteResult(out, q, ArabicLinter.check(out, LintOptions(englishOnOwnLine = en)))
@@ -236,7 +248,8 @@ object WritingEngine {
             Text:
             $text
         """.trimIndent()
-        val raw = if (onPartial != null) client.stream(SkillPrompt.writing, ask, onText = onPartial) else client.complete(SkillPrompt.writing, ask)
+        val sys = SkillPrompt.pick(SkillPrompt.Kind.WRITING, client)
+        val raw = if (onPartial != null) client.stream(sys, ask, onText = onPartial) else client.complete(sys, ask)
         val draft = splitQuestion(raw).first
         return if (dir == TranslateDirection.TO_ARABIC) {
             val out = ArabicLinter.fix(draft, en)
@@ -263,7 +276,8 @@ object WritingEngine {
             النص:
             $text
         """.trimIndent()
-        val raw = if (onPartial != null) client.stream(SkillPrompt.writing, ask, 6000, onPartial) else client.complete(SkillPrompt.writing, ask, 6000)
+        val sys = SkillPrompt.pick(SkillPrompt.Kind.WRITING, client)
+        val raw = if (onPartial != null) client.stream(sys, ask, 6000, onPartial) else client.complete(sys, ask, 6000)
         return VideoPlan.parse(raw) ?: throw IllegalStateException("وصل رد غير مرتب. اضغط مرة ثانية.")
     }
 
@@ -277,12 +291,12 @@ object WritingEngine {
             المستند:
             ${text.take(120_000)}
         """.trimIndent()
-        return ArabicLinter.fix(splitQuestion(client.complete(SkillPrompt.summary, ask)).first, AppSettings.englishOnOwnLine)
+        return ArabicLinter.fix(splitQuestion(client.complete(SkillPrompt.pick(SkillPrompt.Kind.SUMMARY, client), ask)).first, AppSettings.englishOnOwnLine)
     }
 
     /** قراءة ضوئية لصفحات مصوّرة عبر Claude (يقرأ العربي بدقة عالية). */
     suspend fun ocr(pages: List<Bitmap>, onPage: suspend (Int, Int) -> Unit = { _, _ -> }): String {
-        val client = AppSettings.client()
+        val client = AppSettings.claude()
         val out = StringBuilder()
         pages.chunked(4).forEachIndexed { ci, chunk ->
             onPage(minOf((ci + 1) * 4, pages.size), pages.size)

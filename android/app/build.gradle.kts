@@ -49,6 +49,7 @@ android {
         resources { excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/*.kotlin_module") }
     }
     lint { abortOnError = false; checkReleaseBuilds = false }
+    androidResources { noCompress += listOf("task") }
 }
 
 dependencies {
@@ -63,6 +64,7 @@ dependencies {
     implementation("androidx.security:security-crypto:1.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    implementation("com.google.mediapipe:tasks-genai:0.10.24")
 
     testImplementation("junit:junit:4.13.2")
 }

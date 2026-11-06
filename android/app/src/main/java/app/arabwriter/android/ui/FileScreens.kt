@@ -200,7 +200,7 @@ fun WordScreen() {
                     val c = doc?.safeFix() ?: plain?.let { val (t, k) = ArabicLinter.fixInline(it); plain = t; k } ?: 0
                     refresh(); Toasts.show(if (c == 0) "ما فيه أخطاء آمنة للإصلاح" else "أُصلح $c موضع والتنسيق باقٍ")
                 }
-                ActionTile(if (working) "يصيغ…" else "صياغة ذكية", Icons.Rounded.AutoAwesome, AW.Purple, m, enabled = AppSettings.hasKey && !working) {
+                ActionTile(if (working) "يصيغ…" else "صياغة ذكية", Icons.Rounded.AutoAwesome, AW.Purple, m, enabled = AppSettings.aiAvailable && !working) {
                     working = true
                     scope.launch {
                         try {
@@ -615,7 +615,7 @@ fun PdfScreen() {
                         ActionTile(if (logo == null) "إضافة شعار" else "تغيير الشعار", Icons.Rounded.Image, AW.Blue, m) { pickLogo(arrayOf("image/*")) }
                         if (logo != null) ActionTile("حذف الشعار", Icons.Rounded.Close, AW.Pink, m) { logo = null }
                     }
-                    if (!AppSettings.hasKey) { Spacer(Modifier.height(6.dp)); Text("يحتاج مفتاح Claude", color = AW.Orange, fontSize = 12.sp) }
+                    if (!AppSettings.aiAvailable) { Spacer(Modifier.height(6.dp)); Text("يحتاج المحرّك الذكي", color = AW.Orange, fontSize = 12.sp) }
                 }
                 PdfTool.OCR -> if (!AppSettings.hasKey) Text("يحتاج مفتاح Claude", color = AW.Orange, fontSize = 12.sp)
                 else -> {}
@@ -623,7 +623,7 @@ fun PdfScreen() {
             progress?.let { Spacer(Modifier.height(8.dp)); Text(it, color = secondaryText, fontSize = 13.sp) }
             Spacer(Modifier.height(10.dp))
             PrimaryButton(if (working) "يشتغل…" else "نفّذ", Icons.Rounded.PlayArrow, tool.tint,
-                files.isNotEmpty() && !(tool == PdfTool.SUMMARIZE && !AppSettings.hasKey), working, Modifier.fillMaxWidth()) { run() }
+                files.isNotEmpty() && !(tool == PdfTool.SUMMARIZE && !AppSettings.aiAvailable), working, Modifier.fillMaxWidth()) { run() }
         }
 
         if (files.isEmpty()) PickZone(if (tool.images) "اختر صوراً أو PDF" else "اختر ملفات PDF", "ملف واحد أو أكثر", tint) {

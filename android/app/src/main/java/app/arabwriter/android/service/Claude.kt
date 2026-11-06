@@ -27,6 +27,13 @@ object AppSettings {
     var autoRetry by mutableStateOf(true); private set
     var sounds by mutableStateOf(true); private set
     var hasKey by mutableStateOf(false); private set
+    /** "local" = النموذج الداخلي، "claude" = Claude بالمفتاح */
+    var engine by mutableStateOf("local"); private set
+
+    /** فيه محرّك ذكي متاح (داخلي أو Claude). */
+    val aiAvailable get() = LocalModel.isAvailable || hasKey
+    /** الطلب القادم بيروح للنموذج الداخلي. */
+    val usingLocal get() = LocalModel.isAvailable && !(engine == "claude" && hasKey)
 
     val models = listOf(
         "claude-sonnet-5-5" to "Sonnet 5.5 · متوازن",
@@ -48,6 +55,7 @@ object AppSettings {
         englishOnOwnLine = prefs.getBoolean("enLines", true)
         autoRetry = prefs.getBoolean("autoRetry", true)
         sounds = prefs.getBoolean("sounds", true)
+        engine = prefs.getString("engine", "local") ?: "local"
         hasKey = !key().isNullOrBlank()
     }
 
@@ -67,19 +75,24 @@ object AppSettings {
     fun updateEnglish(v: Boolean) { englishOnOwnLine = v; prefs.edit().putBoolean("enLines", v).apply() }
     fun updateRetry(v: Boolean) { autoRetry = v; prefs.edit().putBoolean("autoRetry", v).apply() }
     fun updateSounds(v: Boolean) { sounds = v; prefs.edit().putBoolean("sounds", v).apply() }
+    fun updateEngine(v: String) { engine = v; prefs.edit().putString("engine", v).apply() }
 
-    fun client(): ClaudeClient {
+    fun claude(): ClaudeClient {
         val k = key()
-        if (k.isNullOrBlank()) throw ClaudeException(0, "أضف مفتاح Claude من الإعدادات لتفعيل المزايا الذكية.")
+        if (k.isNullOrBlank()) throw ClaudeException(0, "هذه الميزة تحتاج مفتاح Claude. أضفه من الإعدادات.")
         return ClaudeClient(k, model)
     }
+
+    /** المحرّك المختار: الداخلي افتراضياً، وClaude إذا اختاره المستخدم وعنده مفتاح. */
+    fun client(): TextEngine = if (usingLocal) LocalEngine() else claude()
 }
 
 // ---------- الاتصال ----------
 
 class ClaudeException(val code: Int, msg: String) : Exception(msg)
 
-class ClaudeClient(private val apiKey: String, private val model: String) {
+class ClaudeClient(private val apiKey: String, private val model: String) : TextEngine {
+    override val isLocal = false
 
     private fun friendly(code: Int, msg: String): ClaudeException = ClaudeException(code, when (code) {
         401 -> "المفتاح غير صحيح. راجعه من الإعدادات."
@@ -118,7 +131,7 @@ class ClaudeClient(private val apiKey: String, private val model: String) {
     }
 
     /** طلب كامل. content نص أو مصفوفة محتوى (للصور). */
-    suspend fun complete(system: String, content: Any, maxTokens: Int = 4096): String = withContext(Dispatchers.IO) {
+    override suspend fun complete(system: String, content: Any, maxTokens: Int): String = withContext(Dispatchers.IO) {
         val c = try { open(body(system, content, maxTokens, false)) } catch (e: Exception) { throw friendly(0, e.message ?: "") }
         val code = c.responseCode
         if (code != 200) throw errorOf(c, code)
@@ -135,7 +148,7 @@ class ClaudeClient(private val apiKey: String, private val model: String) {
     }
 
     /** بث حي: onText يستلم النص المتراكم. */
-    suspend fun stream(system: String, content: Any, maxTokens: Int = 4096, onText: suspend (String) -> Unit): String {
+    override suspend fun stream(system: String, content: Any, maxTokens: Int, onText: suspend (String) -> Unit): String {
         val full = withContext(Dispatchers.IO) {
             val c = try { open(body(system, content, maxTokens, true)) } catch (e: Exception) { throw friendly(0, e.message ?: "") }
             val code = c.responseCode

@@ -81,6 +81,8 @@ import androidx.compose.ui.unit.sp
 import app.arabwriter.android.R
 import app.arabwriter.android.service.AppSettings
 import app.arabwriter.android.service.Files
+import app.arabwriter.android.service.LocalModel
+import kotlinx.coroutines.launch
 import app.arabwriter.android.service.PdfTools
 import app.arabwriter.android.service.SkillPrompt
 
@@ -90,9 +92,14 @@ class ArabWriterApp : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
+        LocalModel.init(this)
         AppSettings.init(this)
         SkillPrompt.init(this)
         PdfTools.init(this)
+        // تجهيز النموذج الداخلي في الخلفية أول مرة (نسخه من ملف التثبيت)
+        if (LocalModel.isAvailable) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            runCatching { LocalModel.prepare() }
+        }
     }
 }
 
@@ -197,6 +204,14 @@ fun AppRoot() {
                 }
             }
         }
+        LocalModel.status?.let { st ->
+            Row(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 60.dp).glass(20.dp, AW.Purple)
+                .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), color = AW.Purple, strokeWidth = 2.dp)
+                Spacer(Modifier.width(10.dp))
+                Text(st, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+        }
         ToastHost()
     }
 }
@@ -297,14 +312,16 @@ private fun SectionGrid(items: List<AppSection>, onOpen: (AppSection) -> Unit) {
 
 @Composable
 private fun KeyBadge(onSettings: () -> Unit) {
-    val on = AppSettings.hasKey
+    val on = AppSettings.aiAvailable
     val c = if (on) AW.Green else AW.Orange
     Row(Modifier.fillMaxWidth().glass(18.dp).clickable { onSettings() }.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(10.dp).shadow(6.dp, CircleShape, spotColor = c).clip(CircleShape).background(c))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(if (on) "الذكاء مفعّل" else "وضع بدون إنترنت", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-            Text(if (on) "Claude متصل بمفتاحك" else "أضف مفتاحك للمزايا الذكية", fontSize = 12.sp, color = secondaryText)
+            Text(if (AppSettings.usingLocal) "داخلي · بدون إنترنت" else if (AppSettings.hasKey) "Claude متصل" else "الأدوات فقط",
+                fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            Text(if (AppSettings.usingLocal) "كل شيء يبقى على جوالك" else if (AppSettings.hasKey) "بمفتاحك الخاص" else "أضف مفتاحاً للمزايا الذكية",
+                fontSize = 12.sp, color = secondaryText)
         }
         Icon(Icons.Rounded.VpnKey, null, tint = secondaryText, modifier = Modifier.size(18.dp))
     }
@@ -317,6 +334,30 @@ private fun SettingsScreen() {
     var key by remember { mutableStateOf("") }
     val uri = LocalUriHandler.current
     SectionScroll {
+        GlassPanel {
+            SectionLabel("المحرّك الذكي", Icons.Rounded.AutoAwesome)
+            Spacer(Modifier.size(10.dp))
+            listOf("local" to "داخلي على الجوال · بدون إنترنت", "claude" to "Claude بمفتاحك · أدق").forEach { (id, name) ->
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                    .background(if (AppSettings.engine == id) AW.Purple.copy(alpha = 0.14f) else Color.Transparent)
+                    .clickable { AppSettings.updateEngine(id) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(name, Modifier.weight(1f), fontWeight = if (AppSettings.engine == id) FontWeight.SemiBold else FontWeight.Normal)
+                    if (AppSettings.engine == id) Icon(Icons.Rounded.Verified, null, tint = AW.Purple, modifier = Modifier.size(18.dp))
+                }
+            }
+            Spacer(Modifier.size(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(9.dp).clip(CircleShape).background(if (LocalModel.isAvailable) AW.Green else AW.Orange))
+                Spacer(Modifier.width(8.dp))
+                Text(if (LocalModel.isAvailable) "النموذج الداخلي موجود: Qwen2.5 بمليار ونصف معامل" else "النموذج الداخلي غير موجود في هذه النسخة", fontSize = 13.sp)
+            }
+            if (AppSettings.engine == "claude" && !AppSettings.hasKey)
+                Text("ما فيه مفتاح، فالبرنامج يستخدم الداخلي لين تضيف مفتاحك.", fontSize = 12.sp, color = secondaryText)
+            Spacer(Modifier.size(6.dp))
+            Text("الداخلي يشتغل بالكامل على جوالك ولا يطلع منه أي نص، لكنه أبطأ وأقل دقة. Claude أدق ويحتاج إنترنت ومفتاحاً.",
+                fontSize = 12.sp, color = secondaryText)
+        }
+
         GlassPanel {
             SectionLabel("مفتاح Claude", Icons.Rounded.VpnKey)
             Spacer(Modifier.size(10.dp))
