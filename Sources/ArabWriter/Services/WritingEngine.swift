@@ -316,3 +316,180 @@ enum StoryLength: String, CaseIterable, Identifiable {
         }
     }
 }
+
+// MARK: - الترجمة
+
+enum TranslateDirection: String, CaseIterable, Identifiable {
+    case auto = "تلقائي"
+    case toArabic = "إلى العربي"
+    case toEnglish = "إلى الإنجليزي"
+    var id: String { rawValue }
+    var symbol: String {
+        switch self {
+        case .auto: return "sparkle.magnifyingglass"
+        case .toArabic: return "character.book.closed.ar"
+        case .toEnglish: return "character.book.closed"
+        }
+    }
+
+    /// يحدد الاتجاه من نسبة الحروف العربية في النص.
+    func resolved(for text: String) -> TranslateDirection {
+        guard self == .auto else { return self }
+        let ar = text.unicodeScalars.filter { (0x0600...0x06FF).contains($0.value) }.count
+        let en = text.unicodeScalars.filter { ($0.value >= 65 && $0.value <= 90) || ($0.value >= 97 && $0.value <= 122) }.count
+        return ar >= en ? .toEnglish : .toArabic
+    }
+}
+
+extension WritingEngine {
+    static func translate(_ text: String, direction: TranslateDirection, register: Register,
+                          onPartial: ((String) -> Void)? = nil) async throws -> WriteResult {
+        let settings = AppSettings.shared
+        let en = settings.englishOnOwnLine
+        let client = try settings.client()
+        let dir = direction.resolved(for: text)
+        let ask: String
+        if dir == .toArabic {
+            ask = """
+            المهمة: ترجم النص التالي إلى العربية كما يكتبه إنسان عربي، لا ترجمة حرفية.
+            انقل المعنى والنبرة لا ترتيب الكلمات. طبّق المراحل كلها: لا بصمات آلية ولا تراكيب مترجمة (يلعب دوراً، يفتح الباب أمام).
+            السجل: \(register == .fusha ? "فصحى سهلة" : (register == .saudi ? "لهجة سعودية طبيعية" : "حسب طبيعة النص"))
+            لا تضف ولا تحذف معلومة. أسماء العلم والمنتجات تبقى بالإنجليزية.
+            \(en ? "كل كلمة إنجليزية في سطر مستقل وحدها." : "")
+            أرجع الترجمة وحدها.
+
+            النص:
+            \(text)
+            """
+        } else {
+            ask = """
+            Task: translate the following text into natural, human English, the way a native writer would put it. Not word for word.
+            Carry the meaning and tone. Apply the English rules (no AI markers: delve, leverage, seamless, in today's fast-paced world, it's worth noting).
+            Do not add or drop any fact, number or name. Return the translation only.
+
+            Text:
+            \(text)
+            """
+        }
+        let raw: String
+        if let onPartial {
+            raw = try await client.stream(system: SkillPrompt.writing, user: ask) { onPartial($0) }
+        } else {
+            raw = try await client.complete(system: SkillPrompt.writing, user: ask)
+        }
+        let draft = splitQuestion(raw).0
+        if dir == .toArabic {
+            let out = ArabicLinter.fix(draft, englishOnOwnLine: en)
+            let report = ArabicLinter.check(out, options: LintOptions(source: text, englishOnOwnLine: en))
+            return WriteResult(text: out, question: nil, report: report, changes: [], similarity: 0, usedAI: true)
+        }
+        var report = LintReport()
+        report.stats = ArabicLinter.stats(draft)
+        return WriteResult(text: draft, question: nil, report: report, changes: [], similarity: 0, usedAI: true)
+    }
+}
+
+// MARK: - الفيديو
+
+struct VideoOptions {
+    var seconds: Int
+    var style: String
+    var audio: String
+    var hero: String
+    var platform: String
+}
+
+struct VideoPlan: Decodable {
+    struct Shot: Decodable, Identifiable {
+        let id = UUID()
+        let seconds: Double
+        let action: String
+        enum CodingKeys: String, CodingKey { case seconds, action }
+    }
+    struct Segment: Decodable, Identifiable {
+        let id = UUID()
+        let seconds: Double
+        let prompt: String
+        enum CodingKeys: String, CodingKey { case seconds, prompt }
+    }
+    struct ScreenLine: Decodable, Identifiable {
+        let id = UUID()
+        let at: String
+        let text: String
+        enum CodingKeys: String, CodingKey { case at, text }
+    }
+
+    var text: String = ""
+    var model: String = "best_available"
+    var modelReason: String = ""
+    var shots: [Shot] = []
+    var segments: [Segment] = []
+    var hook: String = ""
+    var screenLines: [ScreenLine] = []
+    var caption: String = ""
+    var hashtags: [String] = []
+
+    enum CodingKeys: String, CodingKey { case text, model, modelReason, shots, segments, hook, screenLines, caption, hashtags }
+
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        text = (try? c.decode(String.self, forKey: .text)) ?? ""
+        model = (try? c.decode(String.self, forKey: .model)) ?? "best_available"
+        modelReason = (try? c.decode(String.self, forKey: .modelReason)) ?? ""
+        shots = (try? c.decode([Shot].self, forKey: .shots)) ?? []
+        segments = (try? c.decode([Segment].self, forKey: .segments)) ?? []
+        hook = (try? c.decode(String.self, forKey: .hook)) ?? ""
+        screenLines = (try? c.decode([ScreenLine].self, forKey: .screenLines)) ?? []
+        caption = (try? c.decode(String.self, forKey: .caption)) ?? ""
+        hashtags = (try? c.decode([String].self, forKey: .hashtags)) ?? []
+    }
+
+    var totalSeconds: Double { shots.reduce(0) { $0 + $1.seconds } }
+
+    /// الحزمة كاملة كنص جاهز للنسخ.
+    var packageText: String {
+        var out: [String] = []
+        out.append("النص\n\(text)")
+        out.append("اللقطات\n" + shots.enumerated().map { "\($0.offset + 1). \(SheetService.format($0.element.seconds)) ث: \($0.element.action)" }.joined(separator: "\n"))
+        out.append("النموذج\n\(model): \(modelReason)")
+        out.append("البرومبتات\n" + segments.enumerated().map { "مقطع \($0.offset + 1) (\(SheetService.format($0.element.seconds)) ث)\n\($0.element.prompt)" }.joined(separator: "\n\n"))
+        out.append("الكابشن\nالخطاف: \(hook)\n" + screenLines.map { "\($0.at): \($0.text)" }.joined(separator: "\n")
+                   + "\n\n\(caption)\n\(hashtags.joined(separator: " "))")
+        return out.joined(separator: "\n\n")
+    }
+}
+
+extension WritingEngine {
+    static func video(_ text: String, options o: VideoOptions, onPartial: ((String) -> Void)? = nil) async throws -> VideoPlan {
+        let client = try AppSettings.shared.client()
+        let ask = """
+        المهمة: وضع الفيديو بأسلوب Commands Only. حوّل النص التالي إلى حزمة فيديو بقواعد المهارة كاملة.
+        المدة: \(o.seconds) ثانية بالضبط. الأسلوب: \(o.style). الصوت: \(o.audio). البطل: \(o.hero). المنصة: \(o.platform)، عمودي 9:16.
+        الأقفال: مجموع ثواني اللقطات يساوي \(o.seconds) بالضبط. 8 و10 ثوانٍ لا تُقسَّم. لا نص عربي داخل الإطار. لا أسماء نماذج مخترعة (اكتب best_available إن لم تتأكد).
+        نظّف النص بالمرحلتين قبل التقطيع.
+        البرومبتات بالإنجليزية: قائمة لقطات (كاميرا، عدسة، ضوء، فعل، صوت) بلا كلمات مثل cinematic masterpiece أو 8k.
+
+        أرجع JSON فقط بلا أي نص قبله أو بعده، بهذه المفاتيح:
+        {"text": "النص النظيف", "model": "اسم النموذج", "modelReason": "سبب في سطر",
+         "shots": [{"seconds": 3, "action": "وصف اللقطة بالعربي"}],
+         "segments": [{"seconds": 10, "prompt": "English prompt"}],
+         "hook": "سطر الخطاف", "screenLines": [{"at": "0:00", "text": "سطر الشاشة"}],
+         "caption": "كابشن النشر", "hashtags": ["#وسم"]}
+
+        النص:
+        \(text)
+        """
+        let raw: String
+        if let onPartial {
+            raw = try await client.stream(system: SkillPrompt.writing, user: ask, maxTokens: 6000) { onPartial($0) }
+        } else {
+            raw = try await client.complete(system: SkillPrompt.writing, user: ask, maxTokens: 6000)
+        }
+        guard let a = raw.firstIndex(of: "{"), let b = raw.lastIndex(of: "}"),
+              let data = String(raw[a...b]).data(using: .utf8),
+              let plan = try? JSONDecoder().decode(VideoPlan.self, from: data) else {
+            throw ToolError.invalid("وصل رد غير مرتب. اضغط مرة ثانية.")
+        }
+        return plan
+    }
+}

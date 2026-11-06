@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var key = ""
     @State private var saved = false
     @State private var sounds = SoundFX.enabled
+    @AppStorage("menuBar") private var menuBar = true
 
     var body: some View {
         Form {
@@ -66,6 +67,7 @@ struct SettingsView: View {
             }
 
             SwiftUI.Section("الواجهة") {
+                Toggle("أيقونة الفحص السريع في شريط القوائم", isOn: $menuBar)
                 Toggle("أصوات الواجهة", isOn: $sounds)
                     .onChange(of: sounds) {
                         UserDefaults.standard.set(sounds, forKey: "sounds")
