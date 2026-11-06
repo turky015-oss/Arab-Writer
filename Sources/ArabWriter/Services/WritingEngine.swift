@@ -372,9 +372,31 @@ enum TranslateDirection: String, CaseIterable, Identifiable {
     /// يحدد الاتجاه من نسبة الحروف العربية في النص.
     func resolved(for text: String) -> TranslateDirection {
         guard self == .auto else { return self }
-        let ar = text.unicodeScalars.filter { (0x0600...0x06FF).contains($0.value) }.count
-        let en = text.unicodeScalars.filter { ($0.value >= 65 && $0.value <= 90) || ($0.value >= 97 && $0.value <= 122) }.count
-        return ar >= en ? .toEnglish : .toArabic
+        return TranslateDirection.arabicShare(text) >= 0.5 ? .toEnglish : .toArabic
+    }
+
+    /// نسبة الحروف العربية من حروف النص (بما فيها أشكال الحروف المنسوخة من PDF)،
+    /// مع تجاهل الروابط والبريد والأرقام والرموز.
+    static func arabicShare(_ text: String) -> Double {
+        let cleaned = text.replacingOccurrences(of: #"https?://\S+|\S+@\S+\.\S+|#\S+|@\S+"#, with: " ", options: .regularExpression)
+        var ar = 0, la = 0
+        for u in cleaned.unicodeScalars {
+            switch u.value {
+            case 0x0600...0x06FF, 0x0750...0x077F, 0x08A0...0x08FF, 0xFB50...0xFDFF, 0xFE70...0xFEFF:
+                if u.properties.isAlphabetic { ar += 1 }
+            case 65...90, 97...122, 0xC0...0x24F: la += 1
+            default: break
+            }
+        }
+        return ar + la == 0 ? 1 : Double(ar) / Double(ar + la)
+    }
+
+    var label: String {
+        switch self {
+        case .auto: return "تلقائي"
+        case .toArabic: return "English ← العربي"
+        case .toEnglish: return "العربي ← English"
+        }
     }
 }
 
@@ -408,13 +430,25 @@ extension WritingEngine {
             \(text)
             """
         }
+        // للإنجليزي: النموذج الداخلي يحتاج تعليمات إنجليزية، وإلا يرجّع عربي
+        let system = (dir == .toEnglish && client.isLocal)
+            ? "You are a professional Arabic-to-English translator. Write natural, human English. Output the English translation only, with no notes, no Arabic, and no quotes."
+            : SkillPrompt.pick(.writing, client)
         let raw: String
         if let onPartial {
-            raw = try await client.stream(system: SkillPrompt.pick(.writing, client), user: ask) { onPartial($0) }
+            raw = try await client.stream(system: system, user: ask) { onPartial($0) }
         } else {
-            raw = try await client.complete(system: SkillPrompt.pick(.writing, client), user: ask)
+            raw = try await client.complete(system: system, user: ask)
         }
-        let draft = splitQuestion(raw).0
+        var draft = splitQuestion(raw).0
+        // تحقق: الناتج باللغة المطلوبة؟ وإلا نعيد مرة بتعليمات أشد
+        let share = TranslateDirection.arabicShare(draft)
+        if (dir == .toArabic && share < 0.6) || (dir == .toEnglish && share > 0.3) {
+            let strict = dir == .toArabic
+                ? "ترجم النص التالي إلى العربية فقط. ممنوع إرجاع النص بلغته الأصلية. أرجع الترجمة العربية وحدها.\n\n\(text)"
+                : "Translate the following text into English only. Do not return Arabic. Output the English translation only.\n\n\(text)"
+            draft = splitQuestion(try await client.complete(system: system, user: strict)).0
+        }
         if dir == .toArabic {
             let out = ArabicLinter.fix(draft, englishOnOwnLine: en)
             let report = ArabicLinter.check(out, options: LintOptions(source: text, englishOnOwnLine: en))

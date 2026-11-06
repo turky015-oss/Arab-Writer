@@ -395,6 +395,8 @@ fun TranslateScreen() {
             SectionLabel("الاتجاه", Icons.Rounded.SwapHoriz); Spacer(Modifier.height(10.dp))
             TileChoice(TranslateDirection.entries, dir, AW.Teal, { it.label }, { Icons.Rounded.Translate }) { dir = it }
         }
+        if (input.isNotBlank()) Text(if (dir == TranslateDirection.AUTO) "اكتشفت: ${resolved.arrow}" else resolved.arrow,
+            Modifier.glass(20.dp, AW.Teal).padding(horizontal = 14.dp, vertical = 8.dp), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         AnimatedVisibility(resolved == TranslateDirection.TO_ARABIC) {
             GlassPanel {
                 SectionLabel("العربي الناتج", Icons.Rounded.Forum); Spacer(Modifier.height(10.dp))

@@ -54,6 +54,15 @@ struct TranslateView: View {
                     }
                 }
 
+                if !input.trimmingCharacters(in: .whitespaces).isEmpty {
+                    Label(direction == .auto ? "اكتشفت: \(resolved.label)" : resolved.label, systemImage: "sparkle.magnifyingglass")
+                        .font(.callout.weight(.semibold))
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .glassEffect(.regular.tint(tint.opacity(0.18)), in: .capsule)
+                        .contentTransition(.opacity)
+                        .animation(.smooth, value: resolved)
+                }
+
                 HStack(alignment: .top, spacing: 12) {
                     GlassPanel {
                         VStack(alignment: .leading, spacing: 10) {

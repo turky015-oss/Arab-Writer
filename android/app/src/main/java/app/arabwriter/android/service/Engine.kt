@@ -73,9 +73,24 @@ enum class TranslateDirection(val label: String) {
 
     fun resolved(text: String): TranslateDirection {
         if (this != AUTO) return this
-        val ar = text.count { it in '؀'..'ۿ' }
-        val en = text.count { it in 'A'..'Z' || it in 'a'..'z' }
-        return if (ar >= en) TO_ENGLISH else TO_ARABIC
+        return if (arabicShare(text) >= 0.5) TO_ENGLISH else TO_ARABIC
+    }
+
+    val arrow get() = when (this) { AUTO -> "تلقائي"; TO_ARABIC -> "English ← العربي"; TO_ENGLISH -> "العربي ← English" }
+
+    companion object {
+        /** نسبة الحروف العربية من حروف النص (بما فيها أشكال الحروف المنسوخة من PDF)، مع تجاهل الروابط والوسوم. */
+        fun arabicShare(text: String): Double {
+            val cleaned = text.replace(Regex("https?://\\S+|\\S+@\\S+\\.\\S+|#\\S+|@\\S+"), " ")
+            var ar = 0; var la = 0
+            for (ch in cleaned) {
+                val c = ch.code
+                if (c in 0x0600..0x06FF || c in 0x0750..0x077F || c in 0x08A0..0x08FF || c in 0xFB50..0xFDFF || c in 0xFE70..0xFEFF) {
+                    if (Character.isLetter(ch)) ar++
+                } else if (ch in 'A'..'Z' || ch in 'a'..'z' || c in 0xC0..0x24F) la++
+            }
+            return if (ar + la == 0) 1.0 else ar.toDouble() / (ar + la)
+        }
     }
 }
 
@@ -248,9 +263,20 @@ object WritingEngine {
             Text:
             $text
         """.trimIndent()
-        val sys = SkillPrompt.pick(SkillPrompt.Kind.WRITING, client)
+        // للإنجليزي: النموذج الداخلي يحتاج تعليمات إنجليزية، وإلا يرجّع عربي
+        val sys = if (dir == TranslateDirection.TO_ENGLISH && client.isLocal)
+            "You are a professional Arabic-to-English translator. Write natural, human English. Output the English translation only, with no notes, no Arabic, and no quotes."
+            else SkillPrompt.pick(SkillPrompt.Kind.WRITING, client)
         val raw = if (onPartial != null) client.stream(sys, ask, onText = onPartial) else client.complete(sys, ask)
-        val draft = splitQuestion(raw).first
+        var draft = splitQuestion(raw).first
+        // تحقق: الناتج باللغة المطلوبة؟ وإلا نعيد مرة بتعليمات أشد
+        val share = TranslateDirection.arabicShare(draft)
+        if ((dir == TranslateDirection.TO_ARABIC && share < 0.6) || (dir == TranslateDirection.TO_ENGLISH && share > 0.3)) {
+            val strict = if (dir == TranslateDirection.TO_ARABIC)
+                "ترجم النص التالي إلى العربية فقط. ممنوع إرجاع النص بلغته الأصلية. أرجع الترجمة العربية وحدها.\n\n$text"
+                else "Translate the following text into English only. Do not return Arabic. Output the English translation only.\n\n$text"
+            draft = splitQuestion(client.complete(sys, strict)).first
+        }
         return if (dir == TranslateDirection.TO_ARABIC) {
             val out = ArabicLinter.fix(draft, en)
             WriteResult(out, null, ArabicLinter.check(out, LintOptions(source = text, englishOnOwnLine = en)))
