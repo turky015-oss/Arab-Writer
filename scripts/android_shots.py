@@ -24,13 +24,22 @@ def nodes():
     except ET.ParseError:
         return []
 
-def tap_text(text, tries=4):
+def opened():
+    return any(n.get("content-desc", "") == "رجوع" for n in nodes())
+
+def tap_text(text, tries=4, verify=True):
     for _ in range(tries):
         for n in nodes():
             if n.get("text", "").strip() == text or n.get("content-desc", "").strip() == text:
                 x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds")))
-                sh("input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
-                return True
+                for _ in range(3):
+                    sh("input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
+                    for _ in range(6):
+                        time.sleep(1)
+                        if not verify or opened():
+                            return True
+                print("… إعادة الضغط", text)
+                return False
         sh("input", "swipe", "540", "1700", "540", "900", "300")  # لو العنصر تحت
         time.sleep(1)
     print("✗ ما لقيت", text)
@@ -61,8 +70,11 @@ if tap_text("داخلي · بدون إنترنت") or tap_text("الأدوات �
 # نص عربي يوصل من «مشاركة» ويفتح قسم الكتابة
 sample = "الذكاء الاصطناعي يلعب دوراً محورياً في تطوير الأعمال، والنتيجه كانت ممتازه امس."
 sh("am", "force-stop", PKG)
-subprocess.run(["adb", "shell", f"am start -a android.intent.action.SEND -t text/plain -n {PKG}/.ui.MainActivity --es android.intent.extra.TEXT '{sample}'"])
-time.sleep(4)
+r = subprocess.run(["adb", "shell", f"am start -W --activity-clear-task -a android.intent.action.SEND -t text/plain -n {PKG}/.ui.MainActivity --es android.intent.extra.TEXT '{sample}'"], capture_output=True, text=True)
+print(r.stdout, r.stderr)
+for _ in range(10):
+    time.sleep(1)
+    if opened(): break
 shot("11-writer-text")
 
 sh("cmd", "uimode", "night", "yes")
