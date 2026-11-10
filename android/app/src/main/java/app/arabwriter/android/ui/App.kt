@@ -157,6 +157,7 @@ object CrashLog {
 /** نص وصل من تطبيق آخر وينتظر قسم الكتابة. */
 object Inbox {
     var text by mutableStateOf<String?>(null)
+    var open by mutableStateOf<String?>(null)
 }
 
 class MainActivity : ComponentActivity() {
@@ -175,6 +176,8 @@ class MainActivity : ComponentActivity() {
     private fun take(i: Intent?) {
         val t = i?.getStringExtra(Intent.EXTRA_TEXT) ?: i?.getStringExtra("open_text")
         if (!t.isNullOrBlank()) Inbox.text = t
+        // فتح قسم مباشرة (يُستعمل لالتقاط صور الشاشة الآلية)
+        i?.getStringExtra("aw_section")?.let { Inbox.open = it }
     }
 }
 
@@ -201,6 +204,13 @@ fun AppRoot() {
     val view = LocalView.current
 
     LaunchedEffect(Inbox.text) { if (Inbox.text != null) { settings = false; section = AppSection.WRITER } }
+    LaunchedEffect(Inbox.open) {
+        Inbox.open?.let { k ->
+            if (k == "settings") { section = null; settings = true }
+            else runCatching { AppSection.valueOf(k) }.getOrNull()?.let { settings = false; section = it }
+            Inbox.open = null
+        }
+    }
     BackHandler(section != null || settings) { if (settings) settings = false else section = null }
 
     Box(Modifier.fillMaxSize()) {

@@ -53,33 +53,32 @@ def launch():
     sh("monkey", "-p", PKG, "-c", "android.intent.category.LAUNCHER", "1")
     time.sleep(5)
 
-launch()
-shot("01-home")
-sections = [("الكتابة", "02-writer"), ("الفاحص", "03-checker"), ("الترجمة", "04-translate"),
-            ("القصة", "05-story"), ("الفيديو", "06-video"), ("وورد", "07-word"),
-            ("إكسل", "08-sheet"), ("PDF", "09-pdf")]
-for title, name in sections:
-    launch()
-    if tap_text(title):
-        shot(name)
+def open_section(key):
+    sh("am", "force-stop", PKG)
+    sh("am", "start", "-W", "-n", f"{PKG}/.ui.MainActivity", "--es", "aw_section", key)
+    time.sleep(4)
 
 launch()
-if tap_text("داخلي · بدون إنترنت") or tap_text("الأدوات فقط") or tap_text("Claude متصل"):
-    shot("10-settings")
+shot("01-home")
+for key, name in [("WRITER", "02-writer"), ("CHECKER", "03-checker"), ("TRANSLATE", "04-translate"),
+                  ("STORY", "05-story"), ("VIDEO", "06-video"), ("WORD", "07-word"),
+                  ("SHEET", "08-sheet"), ("PDF", "09-pdf"), ("settings", "10-settings")]:
+    open_section(key)
+    shot(name)
 
 # نص عربي يوصل من «مشاركة» ويفتح قسم الكتابة
 sample = "الذكاء الاصطناعي يلعب دوراً محورياً في تطوير الأعمال، والنتيجه كانت ممتازه امس."
 sh("am", "force-stop", PKG)
 r = subprocess.run(["adb", "shell", f"am start -W --activity-clear-task -a android.intent.action.SEND -t text/plain -n {PKG}/.ui.MainActivity --es android.intent.extra.TEXT '{sample}'"], capture_output=True, text=True)
 print(r.stdout, r.stderr)
-for _ in range(10):
-    time.sleep(1)
-    if opened(): break
+time.sleep(5)
 shot("11-writer-text")
 
 sh("cmd", "uimode", "night", "yes")
 launch()
 shot("12-home-dark")
-if tap_text("الترجمة"):
-    shot("13-translate-dark")
+open_section("TRANSLATE")
+shot("13-translate-dark")
+open_section("WRITER")
+shot("14-writer-dark")
 sh("cmd", "uimode", "night", "no")

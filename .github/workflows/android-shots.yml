@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [mac-app]
-    paths: ["scripts/android_shots.py", ".github/workflows/android-shots.yml"]
+    paths: ["scripts/android_shots.py", ".github/workflows/android-shots.yml", "android/**"]
 
 permissions:
   contents: write
