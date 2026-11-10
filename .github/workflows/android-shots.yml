@@ -6,6 +6,9 @@ on:
     branches: [mac-app]
     paths: ["scripts/android_shots.py", ".github/workflows/android-shots.yml"]
 
+permissions:
+  contents: write
+
 jobs:
   shots:
     runs-on: ubuntu-latest
@@ -44,3 +47,9 @@ jobs:
         with:
           name: android-screenshots
           path: shots/*.png
+      - name: Publish to branch
+        if: always()
+        run: |
+          cd shots && git init -q && git checkout -q -b android-shots
+          git add *.png && git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "screenshots"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" android-shots
