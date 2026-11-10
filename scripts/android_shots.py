@@ -10,8 +10,12 @@ os.makedirs(OUT, exist_ok=True)
 def sh(*a, check=False):
     return subprocess.run(["adb", "shell", *a], capture_output=True, text=True, check=check).stdout
 
+def calm():
+    sh("am", "broadcast", "-a", "android.intent.action.CLOSE_SYSTEM_DIALOGS")
+
 def shot(name):
     time.sleep(2.5)
+    calm(); time.sleep(0.8)
     with open(f"{OUT}/{name}.png", "wb") as f:
         f.write(subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True).stdout)
     print("✓", name)
@@ -52,6 +56,13 @@ def launch():
     sh("am", "force-stop", PKG)
     sh("monkey", "-p", PKG, "-c", "android.intent.category.LAUNCHER", "1")
     time.sleep(5)
+
+# إسكات نوافذ «لا يستجيب» الخاصة بالمحاكي نفسه
+sh("settings", "put", "global", "hide_error_dialogs", "1")
+sh("settings", "put", "secure", "anr_show_background", "0")
+sh("pm", "disable-user", "--user", "0", "com.google.android.apps.nexuslauncher")
+time.sleep(20)
+calm()
 
 def open_section(key):
     sh("am", "force-stop", PKG)
