@@ -141,18 +141,11 @@ def cmd_info(a):
 
 def cmd_check(a):
     import ar_lint
+    from pdf_extract import extract_pages   # نفس الاستخراج المطبَّع الذي يستعمله التلخيص
     r = reader(a.input, a.password)
     idx = pages_spec(a.pages, len(r.pages))
     err = warn = 0
-    for i in idx:
-        exe = shutil.which("pdftotext")
-        if exe:
-            t = subprocess.run([exe, "-layout", "-f", str(i + 1), "-l", str(i + 1), a.input, "-"],
-                               capture_output=True, text=True).stdout
-        else:
-            t = r.pages[i].extract_text() or ""
-        t = re.sub("[\u200e\u200f\u202a-\u202e\u2066-\u2069]", "", t)  # رموز الاتجاه من الاستخراج
-        t = re.sub(r"[ \t]{2,}", " ", t)
+    for n, t in extract_pages(a.input, idx, a.password):
         if not AR_RE.search(t):
             continue
         rep, _ = ar_lint.check(t, en_lines=False)
@@ -161,7 +154,7 @@ def cmd_check(a):
                 continue  # استخراج PDF يفسد المسافات والأسطر، فلا يُحكم عليها
             mark = "✗" if it["level"] == "خطأ" else "·"
             at = f"  ⟵ {it['at']}" if "at" in it else ""
-            print(f"{mark} ص{i + 1} [{it['kind']}] {it['msg']}{at}")
+            print(f"{mark} ص{n} [{it['kind']}] {it['msg']}{at}")
             err += it["level"] == "خطأ"
             warn += it["level"] != "خطأ"
     print(f"\nالأخطاء {err} · التنبيهات {warn}")
@@ -229,10 +222,10 @@ def cmd_rotate(a):
     r = reader(a.input, a.password)
     sel = set(pages_spec(a.pages, len(r.pages)))
     w = PdfWriter()
-    for i, p in enumerate(r.pages):
+    for i, src in enumerate(r.pages):
+        p = w.add_page(src)
         if i in sel:
             p.rotate(a.deg)
-        w.add_page(p)
     write(w, a.output, a.input)
 
 
@@ -256,7 +249,8 @@ def cmd_watermark(a):
     sel = set(pages_spec(a.pages, len(r.pages)))
     font, shape = ar_font()
     w = PdfWriter()
-    for i, p in enumerate(r.pages):
+    for i, src in enumerate(r.pages):
+        p = w.add_page(src)
         if i in sel:
             W, H = float(p.mediabox.width), float(p.mediabox.height)
 
@@ -270,7 +264,6 @@ def cmd_watermark(a):
                 c.drawCentredString(0, 0, shape(a.text))
                 c.restoreState()
             p.merge_page(overlay_pdf(W, H, draw))
-        w.add_page(p)
     write(w, a.output, a.input)
 
 
@@ -282,7 +275,8 @@ def cmd_stamp(a):
     iw, ih = img.getSize()
     w = PdfWriter()
     mm = 72 / 25.4
-    for i, p in enumerate(r.pages):
+    for i, src in enumerate(r.pages):
+        p = w.add_page(src)
         if i in sel:
             W, H = float(p.mediabox.width), float(p.mediabox.height)
             dw = a.width * mm
@@ -295,7 +289,6 @@ def cmd_stamp(a):
                 c.setFillAlpha(a.opacity)
                 c.drawImage(img, x, y, dw, dh, mask="auto")
             p.merge_page(overlay_pdf(W, H, draw))
-        w.add_page(p)
     write(w, a.output, a.input)
 
 
@@ -304,7 +297,8 @@ def cmd_number(a):
     font, shape = ar_font()
     total = len(r.pages)
     w = PdfWriter()
-    for i, p in enumerate(r.pages):
+    for i, src in enumerate(r.pages):
+        p = w.add_page(src)
         if not (a.skip_first and i == 0):
             W, H = float(p.mediabox.width), float(p.mediabox.height)
             n = i + a.start - (1 if a.skip_first else 0)
@@ -315,7 +309,6 @@ def cmd_number(a):
                 c.setFillColorRGB(0.35, 0.37, 0.4)
                 c.drawCentredString(W / 2, 22, shape(label))
             p.merge_page(overlay_pdf(W, H, draw))
-        w.add_page(p)
     write(w, a.output, a.input)
 
 

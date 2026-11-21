@@ -84,15 +84,45 @@ run("PDF: فحص النص", "pdf_tools.py", "check", p("g.pdf"), must="الأخ�
 run("PDF: دمج", "pdf_tools.py", "merge", p("m.pdf"), p("g.pdf"), p("g.pdf"), must="2 صفحة")
 run("PDF: استخراج", "pdf_tools.py", "extract", p("m.pdf"), p("e.pdf"), "--pages", "2", must="1 صفحة")
 run("PDF: حذف", "pdf_tools.py", "delete", p("m.pdf"), p("d.pdf"), "--pages", "1", must="1 صفحة")
-run("PDF: تدوير", "pdf_tools.py", "rotate", p("m.pdf"), p("r.pdf"), "--deg", "90")
-run("PDF: علامة مائية عربية", "pdf_tools.py", "watermark", p("m.pdf"), p("w.pdf"), "--text", "سري")
-run("PDF: ترقيم", "pdf_tools.py", "number", p("w.pdf"), p("n.pdf"), "--fmt", "صفحة {n} من {total}")
+run("PDF: تدوير", "pdf_tools.py", "rotate", p("m.pdf"), p("r.pdf"), "--deg", "90", must="2 صفحة")
+run("PDF: علامة مائية عربية", "pdf_tools.py", "watermark", p("m.pdf"), p("w.pdf"), "--text", "سري", must="2 صفحة")
+run("PDF: ترقيم", "pdf_tools.py", "number", p("w.pdf"), p("n.pdf"), "--fmt", "صفحة {n} من {total}", must="2 صفحة")
 run("PDF: حماية", "pdf_tools.py", "protect", p("n.pdf"), p("pr.pdf"), "--password", "1234")
 run("PDF: فتح", "pdf_tools.py", "unlock", p("pr.pdf"), p("u.pdf"), "--password", "1234")
 run("PDF: كلمة مرور خاطئة", "pdf_tools.py", "unlock", p("pr.pdf"), p("u2.pdf"), "--password", "0000", expect=1)
 run("PDF: ضغط", "pdf_tools.py", "compress", p("u.pdf"), p("c.pdf"), must="ك.ب")
 run("PDF: تقسيم", "pdf_tools.py", "split", p("m.pdf"), p("parts"), must="2 ملف")
 run("PDF: إلى وورد", "pdf_tools.py", "to-docx", p("g.pdf"), p("back.docx"), must="حُفظ")
+
+# PDF عربي رقمي: الاستخراج المطبَّع (أشكال العرض والترتيب البصري) يخدم التلخيص والفحص معاً
+KNOWN = "اذا كنت تبحث عن افضل طريقه لتنظيم وقتك فهذه الأدوات تساعدك على العمل من البيت."
+with open(p("ar.md"), "w", encoding="utf-8") as f:
+    f.write(f"# تقرير قصير\n\n{KNOWN}\n\nبلغت المبيعات 450 ألف ريال في مارس.\n")
+run("PDF عربي: إنشاء", "ar_pdf.py", p("ar.md"), p("ar.pdf"))
+out = run("PDF عربي: استخراج بالحروف المنطقية", "pdf_extract.py", p("ar.pdf"), must=KNOWN)
+if any(0xFB50 <= ord(c) <= 0xFDFF or 0xFE70 <= ord(c) <= 0xFEFF for c in out):
+    bad += 1
+    print("✗ PDF عربي: بقيت أشكال عرض في المستخرج")
+else:
+    ok += 1
+    print("✓ PDF عربي: لا أشكال عرض في المستخرج")
+run("PDF عربي: الرقم في مكانه", "pdf_extract.py", p("ar.pdf"), must="المبيعات 450 ألف ريال")
+run("PDF عربي: الفحص يرى الخطأ المقصود", "pdf_tools.py", "check", p("ar.pdf"), must="«طريقه» ← «طريقة»")
+
+sys.path.insert(0, SC)
+try:
+    import pdfplumber  # noqa: E402
+    import pdf_extract  # noqa: E402
+    with pdfplumber.open(p("ar.pdf")) as pdf:
+        visual = pdf.pages[0].extract_text() or ""
+    if KNOWN in pdf_extract.clean_arabic(visual):
+        ok += 1
+        print("✓ PDF عربي: الترتيب البصري يعود منطقياً")
+    else:
+        bad += 1
+        print(f"✗ PDF عربي: الترتيب البصري لم يُصحَّح\n{pdf_extract.clean_arabic(visual)}")
+except ImportError:
+    print("· PDF عربي: pdfplumber غير مثبت، تخطّي اختبار الترتيب البصري")
 
 print(f"\nالنتيجة: {ok} ناجح، {bad} فاشل")
 sys.exit(1 if bad else 0)
