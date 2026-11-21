@@ -141,18 +141,11 @@ def cmd_info(a):
 
 def cmd_check(a):
     import ar_lint
+    from pdf_extract import extract_pages   # نفس الاستخراج المطبَّع الذي يستعمله التلخيص
     r = reader(a.input, a.password)
     idx = pages_spec(a.pages, len(r.pages))
     err = warn = 0
-    for i in idx:
-        exe = shutil.which("pdftotext")
-        if exe:
-            t = subprocess.run([exe, "-layout", "-f", str(i + 1), "-l", str(i + 1), a.input, "-"],
-                               capture_output=True, text=True).stdout
-        else:
-            t = r.pages[i].extract_text() or ""
-        t = re.sub("[\u200e\u200f\u202a-\u202e\u2066-\u2069]", "", t)  # رموز الاتجاه من الاستخراج
-        t = re.sub(r"[ \t]{2,}", " ", t)
+    for n, t in extract_pages(a.input, idx, a.password):
         if not AR_RE.search(t):
             continue
         rep, _ = ar_lint.check(t, en_lines=False)
@@ -161,7 +154,7 @@ def cmd_check(a):
                 continue  # استخراج PDF يفسد المسافات والأسطر، فلا يُحكم عليها
             mark = "✗" if it["level"] == "خطأ" else "·"
             at = f"  ⟵ {it['at']}" if "at" in it else ""
-            print(f"{mark} ص{i + 1} [{it['kind']}] {it['msg']}{at}")
+            print(f"{mark} ص{n} [{it['kind']}] {it['msg']}{at}")
             err += it["level"] == "خطأ"
             warn += it["level"] != "خطأ"
     print(f"\nالأخطاء {err} · التنبيهات {warn}")

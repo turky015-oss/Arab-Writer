@@ -22,17 +22,29 @@ with open(os.path.join(HERE, "cases.json"), encoding="utf-8") as f:
 passed = failed = 0
 
 
+def blob_of(items):
+    return " | ".join(f"{i['kind']} {i['msg']}" for i in items)
+
+
 def blob(report):
-    return " | ".join(f"{i['kind']} {i['msg']}" for i in report.items)
+    return blob_of(report.items)
 
 
 for c in CASES["detect"]:
-    r, _ = ar_lint.check(c["text"], words_target=c.get("words"), source=c.get("source"))
+    r, _ = ar_lint.check(c["text"], words_target=c.get("words"), source=c.get("source"),
+                         strict_style=c.get("strict_style", False))
     b = blob(r)
     missing = [m for m in c["must_find"] if m not in b]
+    nb = len(r.blocking)
     if missing:
         failed += 1
         print(f"✗ كشف: {c['name']} — لم يُكتشف: {missing}")
+    elif "max_blocking" in c and nb > c["max_blocking"]:
+        failed += 1
+        print(f"✗ كشف: {c['name']} — {nb} خطأ مانع والحد {c['max_blocking']}: {blob_of(r.blocking)}")
+    elif "min_blocking" in c and nb < c["min_blocking"]:
+        failed += 1
+        print(f"✗ كشف: {c['name']} — {nb} خطأ مانع والمطلوب {c['min_blocking']} على الأقل")
     else:
         passed += 1
         print(f"✓ كشف: {c['name']}")
@@ -50,6 +62,9 @@ for c in CASES["fix"]:
     out = ar_lint.fix(c["text"])
     bad = [w for w in c.get("must_contain", []) if w not in out] + \
           [w for w in c.get("must_not_contain", []) if w in out]
+    if c.get("check_clean"):
+        r2, _ = ar_lint.check(out)
+        bad += [f"بعد الإصلاح: {i['msg']}" for i in r2.blocking]
     if bad:
         failed += 1
         print(f"✗ إصلاح: {c['name']} — {bad}\n    الناتج: {out!r}")

@@ -1,0 +1,24 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q poppler-utils libreoffice-writer-nogui libreoffice-calc-nogui fonts-noto-core
+          pip install -q python-docx openpyxl pypdf pdfplumber reportlab arabic-reshaper python-bidi pdf2docx
+      - name: Linter cases
+        run: python3 tests/run_tests.py
+      - name: Fixed corpus (locked blocking counts)
+        run: python3 tests/run_corpus.py
+      - name: File tools
+        run: python3 tests/run_files.py

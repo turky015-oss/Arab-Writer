@@ -94,5 +94,35 @@ run("PDF: ضغط", "pdf_tools.py", "compress", p("u.pdf"), p("c.pdf"), must="ك.
 run("PDF: تقسيم", "pdf_tools.py", "split", p("m.pdf"), p("parts"), must="2 ملف")
 run("PDF: إلى وورد", "pdf_tools.py", "to-docx", p("g.pdf"), p("back.docx"), must="حُفظ")
 
+# PDF عربي رقمي: الاستخراج المطبَّع (أشكال العرض والترتيب البصري) يخدم التلخيص والفحص معاً
+KNOWN = "اذا كنت تبحث عن افضل طريقه لتنظيم وقتك فهذه الأدوات تساعدك على العمل من البيت."
+with open(p("ar.md"), "w", encoding="utf-8") as f:
+    f.write(f"# تقرير قصير\n\n{KNOWN}\n\nبلغت المبيعات 450 ألف ريال في مارس.\n")
+run("PDF عربي: إنشاء", "ar_pdf.py", p("ar.md"), p("ar.pdf"))
+out = run("PDF عربي: استخراج بالحروف المنطقية", "pdf_extract.py", p("ar.pdf"), must=KNOWN)
+if any(0xFB50 <= ord(c) <= 0xFDFF or 0xFE70 <= ord(c) <= 0xFEFF for c in out):
+    bad += 1
+    print("✗ PDF عربي: بقيت أشكال عرض في المستخرج")
+else:
+    ok += 1
+    print("✓ PDF عربي: لا أشكال عرض في المستخرج")
+run("PDF عربي: الرقم في مكانه", "pdf_extract.py", p("ar.pdf"), must="المبيعات 450 ألف ريال")
+run("PDF عربي: الفحص يرى الخطأ المقصود", "pdf_tools.py", "check", p("ar.pdf"), must="«طريقه» ← «طريقة»")
+
+sys.path.insert(0, SC)
+try:
+    import pdfplumber  # noqa: E402
+    import pdf_extract  # noqa: E402
+    with pdfplumber.open(p("ar.pdf")) as pdf:
+        visual = pdf.pages[0].extract_text() or ""
+    if KNOWN in pdf_extract.clean_arabic(visual):
+        ok += 1
+        print("✓ PDF عربي: الترتيب البصري يعود منطقياً")
+    else:
+        bad += 1
+        print(f"✗ PDF عربي: الترتيب البصري لم يُصحَّح\n{pdf_extract.clean_arabic(visual)}")
+except ImportError:
+    print("· PDF عربي: pdfplumber غير مثبت، تخطّي اختبار الترتيب البصري")
+
 print(f"\nالنتيجة: {ok} ناجح، {bad} فاشل")
 sys.exit(1 if bad else 0)
