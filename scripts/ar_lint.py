@@ -154,7 +154,8 @@ MARKERS = {
     "ترجمة حرفية": [
         "يلعب دورا", "تلعب دورا", "يفتح الباب أمام", "تفتح الباب أمام", "يفتح آفاقا",
         "تفتح آفاقا", "يشكل تحديا", "يمثل نقلة نوعية", "نقلة نوعية", "يغير قواعد اللعبة",
-        "تغير قواعد اللعبة", "يعيد تشكيل", "تعيد تشكيل", "يعيد تعريف", "تعيد تعريف",
+        "تغير قواعد اللعبة", "يعيد تشكيل", "تعيد تشكيل", "إعادة تشكيل", "إعادة التشكيل",
+        "يعيد تعريف", "تعيد تعريف", "إعادة تعريف",
         "على نطاق واسع", "في نهاية المطاف", "تجربة مستخدم سلسة", "حلول متكاملة",
         "الاستفادة القصوى", "إطلاق العنان", "استكشاف الإمكانيات", "ثوري", "ثورية",
     ],
@@ -295,6 +296,8 @@ ALA_FIXED_NEXT = set("""الرغم رغم الأقل الاقل الفور ال�
 NAME_PREV = set("""قال قالت ذكر أضاف صرح أوضح مع يا الأستاذ الاستاذ المهندس الدكتور الشيخ الأمير
 الامير الملك أخي اخي أخو أخوك ابن بن أبو ابو والد والده السيد الكابتن المدير الطالب زميلي صديقي
 اسمه اسمي سمى سميته""".split())
+# ما يأتي بعد «علي» العلم مباشرة في النسب: يُفحص قبل أي حكومة فعل.
+KINSHIP_NEXT = set("""بن بنت ابن ابنة أخ أخت أخو أبو أم عم عمة خال خالة""".split())
 
 
 def rule_ala(norm):
@@ -307,7 +310,10 @@ def rule_ala(norm):
         prev = toks[i - 1][2] if i > 0 and _same_clause(norm, toks[i - 1][1], a) else ""
         nxt = toks[i + 1][2] if i + 1 < len(toks) and _same_clause(norm, b, toks[i + 1][0]) else ""
         prev_b = _bare(prev) if prev else ""
+        nxt_b = _bare(nxt) if nxt else ""
         right = "على"
+        if nxt in KINSHIP_NEXT or nxt_b in KINSHIP_NEXT:
+            continue
         if nxt in ALA_FIXED_NEXT:
             yield (a + off, b, right, "إملاء", f"«{w} {nxt}» ← «على {nxt}»", "خطأ")
         elif prev_b in NAME_PREV or prev in NAME_PREV:
@@ -367,25 +373,39 @@ MASC_PLURALS = set("""رجال أيام أشهر شهور أسابيع أعوا�
 قطارات مطارات جوالات حمامات مختبرات مؤتمرات منتجات محركات مصطلحات مجالات مقالات مستويات مكونات
 أطفال طلاب أولاد إخوة أفكار أسباب أجهزة أهداف أسئلة أعمال أسعار أرقام أخبار مشاريع مواقع فيديوهات
 ملايين آلاف مليارات دروس فصول أبواب أقسام أسطر سطور أمتار كيلومترات""".split())
+# جمع «ـات» الذي عُرف مفرده: لا يُحكم بالشكل وحده.
+# مذكر مفرده مذكر (إجراء/قرار/اتفاق...) — كان يُصلَّح خطأً إلى بلا تاء.
+MASC_AT_PLURALS = {fold(w) for w in """إجراءات اجراءات قرارات اتفاقات بيانات اختبارات اجتماعات
+استخدامات اقتراحات إنجازات انجازات تدريبات تصميمات تحليلات تعليقات مجالات منتجات ملفات
+مؤتمرات مختبرات قطارات مطارات محركات مصطلحات مقالات مستويات مكونات""".split()}
+# مؤنث عُرف مفرده (سيارة/شركة/جامعة...) — يُصلَّح آلياً.
+FEM_AT_PLURALS = {fold(w) for w in """شركات سيارات جامعات منصات مكتبات عيادات عائلات لغات
+ساعات ميزات أدوات سنوات طرق مرات دول مدن غرف صور فرص رسائل حقائق وظائف نقاط خطوات""".split()}
 
 
 def plural_gender(w):
     if w.startswith("ال") or len(w) < 3:
         return None
-    if w in FEM_PLURALS:
+    fw = fold(w)
+    if w in FEM_PLURALS or fw in {fold(x) for x in FEM_PLURALS}:
         return "f"
-    if w in MASC_PLURALS:
+    if w in MASC_PLURALS or fw in {fold(x) for x in MASC_PLURALS}:
         return "m"
+    if fw in MASC_AT_PLURALS:
+        return "m"
+    if fw in FEM_AT_PLURALS:
+        return "f"
     if w.endswith(("ين", "ون")) and len(w) >= 5:
         return "m"   # جمع المذكر السالم
     if w.endswith("ات") and len(w) >= 4:
         if (re.fullmatch(r"ت..ي.ات", w) or re.fullmatch(r"[اإ].ت.ا.ات", w)
                 or re.fullmatch(r"[اإ]ن..ا.ات", w) or w.startswith(("است", "إست"))
                 or re.fullmatch(r"م..و.ات", w) or w.endswith("انات")):
-            return "m"   # تفعيل، افتعال، انفعال، استفعال، مفعول، ـان: مفردها مذكر
-        if w.startswith("م"):
-            return None  # منصات/منتجات: لا يُحكم بالشكل وحده
-        return "f"       # جمع المؤنث السالم: مفرده بالتاء غالباً
+            # وزن مذكر واضح (تفعيل/افتعال/انفعال/استفعال/مفعول) — يُحسم مذكراً
+            # إلا إن عُرف مؤنثاً صراحة في FEM_AT_PLURALS أعلاه.
+            return "m"
+        # غير ذلك: الجنس من المفرد المعروف فقط، وإلا مجهول — لا تخمين بالشكل.
+        return None
     if re.fullmatch(r"..ائ.", w):
         return "f"       # فعائل: دقائق، رسائل، حقائق
     return None
@@ -402,6 +422,8 @@ def rule_number(norm):
             continue   # 13 إلى 19 لها حكم آخر
         g = plural_gender(noun)
         if g is None:
+            yield (m.start(2), m.end(3) if m.group(3) else m.end(2), None, "نحو",
+                   f"«{m.group(2)}{suf} {noun}»: راجع جنس المفرد — العدد يخالف المعدود، ولا إصلاح آلياً لجمع غير معروف", "تنبيه")
             continue
         has_ta = suf in ("ة", "ية")
         fem_form, masc_form = NUM_FORMS[root]
@@ -411,24 +433,37 @@ def rule_number(norm):
                    f"«{m.group(2)}{suf} {noun}»: العدد يخالف المعدود ← «{want} {noun}»", "خطأ")
 
 
-# الأفعال الخمسة بعد الجازم والناصب: تُحذف النون
+# الأفعال الخمسة بعد الجازم والناصب: تُحذف النون.
+# القاعدة صرفية لا حرفية: الفعل المضارع (ي/ت + جذر) + واو الجماعة/ألف الاثنين + نون الرفع.
+# المفرد القصير (يكون/يصون/يهون: طول 4) يُستثنى بالطول لا بآخر ثلاثة حروف،
+# والمفرد الطويل (يتعاون: ينتهي بألف) يُستثنى بالألف.
 FIVE_TRIG = r"لم|لن|كي|لكي|أن|ان|ألا|لئلا"
-ROOT_NUN = {"كون", "صون", "هون", "خون", "دون", "لون"}
 
 
 def rule_five_verbs(norm):
-    for m in re.finditer(rf"{B}(?:[وف]?)({FIVE_TRIG})\s+([يت][{AR_LET}]+?)(ون|ين){E}", norm):
+    for m in re.finditer(rf"{B}(?:[وف]?)({FIVE_TRIG})\s+([يت][{AR_LET}]+?)(ون|ان|ين){E}", norm):
         trig = m.group(1)
-        stem, end = m.group(2)[1:], m.group(3)
-        word = m.group(2) + end
+        stem_full, end = m.group(2), m.group(3)
+        word = stem_full + end
+        body = stem_full[1:]  # الجذر بعد ياء/تاء المضارعة
         if end == "ين":
-            if m.group(2).startswith("ت") and len(stem) >= 3 and not stem.endswith("ا"):
+            if stem_full.startswith("ت") and len(body) >= 3 and not body.endswith("ا"):
                 yield (m.start(2), m.end(3), None, "نحو",
                        f"«{trig} {word}»: إن كان للمخاطبة فتُحذف النون بعد الجازم والناصب", "تنبيه")
             continue
-        if len(stem) < 2 or stem.endswith("ا") or word[-3:] in ROOT_NUN:
+        # المفرد القصير: يكون/يصون/يهون (4 حروف) — النون أصلية لا نون رفع.
+        if len(word) <= 4:
             continue
-        right = word[:-1] + "ا"
+        # المفرد المزيد بالألف: يتعاون/يتسامح — الألف قبل النون أصلية.
+        if body.endswith("ا"):
+            continue
+        # بقية الجذر أقصر من حرفين: ليس جمعاً (حماية إضافية).
+        if len(body) < 2:
+            continue
+        if end == "ون":
+            right = word[:-1] + "ا"   # يقولون ← يقولوا
+        else:  # ان → ا للمثنى: يكتبان ← يكتبا
+            right = word[:-1]          # حذف نون الرفع
         yield (m.start(2), m.end(3), right, "نحو",
                f"«{trig} {word}»: الأفعال الخمسة تُجزم وتُنصب بحذف النون ← «{trig} {right}»", "خطأ")
 
@@ -647,6 +682,14 @@ def check(text, words_target=None, lines_target=None, source=None, en_lines=True
         taken.append((a0, b0))
         r.add(style, "بصمة آلية: " + kind, f"«{ph}»", norm, a0, b0,
               "احذفها أو ضع مكانها الحقيقة المحددة")
+
+    # ترجمة حرفية بفاصل: «يلعب ... دوراً» (يلعب دوراً مهماً في/يلعب التطبيق دوراً).
+    for m in re.finditer(rf"{B}(يلعب|تلعب|يلعبون|تلعبون|لعبت|يلعبا)(?:\s+[{AR_LET}]+){{1,3}}\s+(دورا|دوراً|دور){E}", folded):
+        if any(m.start() < tb and ta < m.end() for ta, tb in taken):
+            continue
+        taken.append((m.start(), m.end()))
+        r.add(style, "بصمة آلية: ترجمة حرفية", f"«{m.group(0).strip()}»", norm, m.start(), m.end(),
+              "سمِّ الفعل الحقيقي: من فعل ماذا؟")
 
     for adv in SOFT_ADVERBS:
         for m in re.finditer(rf"{B}{adv}{E}", folded):
