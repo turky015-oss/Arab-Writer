@@ -35,10 +35,14 @@ for c in CASES["detect"]:
                          strict_style=c.get("strict_style", False))
     b = blob(r)
     missing = [m for m in c["must_find"] if m not in b]
+    extra = [m for m in c.get("must_not_find", []) if m in b]
     nb = len(r.blocking)
     if missing:
         failed += 1
         print(f"✗ كشف: {c['name']} — لم يُكتشف: {missing}")
+    elif extra:
+        failed += 1
+        print(f"✗ كشف: {c['name']} — ظهر ما يجب غيابه: {extra}: {b}")
     elif "max_blocking" in c and nb > c["max_blocking"]:
         failed += 1
         print(f"✗ كشف: {c['name']} — {nb} خطأ مانع والحد {c['max_blocking']}: {blob_of(r.blocking)}")
