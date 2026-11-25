@@ -299,8 +299,14 @@ NAME_PREV = set("""قال قالت ذكر أضاف صرح أوضح مع يا ا�
 # ما يأتي بعد «علي» العلم مباشرة في النسب: يُفحص قبل أي حكومة فعل.
 KINSHIP_NEXT = set("""بن بنت ابن ابنة أخ أخت أخو أبو أم عم عمة خال خالة""".split())
 # أسماء أعلام محتملة بعد «علي»: لا إصلاح آلياً، تنبيه للمراجعة فقط.
+# تُقارن بلا «ال» لتغطي «الحسن/الحسين» أيضاً.
 PROPER_NEXT = {fold(w) for w in """محمد أحمد خالد سعد فهد عبدالله عبدالعزيز عبدالرحمن عبدالمجيد
-عبدالإله تركي سلطان ناصر سارة فاطمة نورة مريم ريم لينا""".split()}
+عبدالإله تركي سلطان ناصر يوسف حسن حسين عمر عثمان ابراهيم إبراهيم يوسف كريم سامي ماجد
+نايف فيصل هند سارة فاطمة نورة مريم ريم لينا سلمى""".split()}
+
+
+def _strip_al(w):
+    return w[2:] if w.startswith("ال") and len(w) > 4 else w
 
 
 def rule_ala(norm):
@@ -321,7 +327,9 @@ def rule_ala(norm):
             yield (a + off, b, right, "إملاء", f"«{w} {nxt}» ← «على {nxt}»", "خطأ")
         elif prev_b in NAME_PREV or prev in NAME_PREV:
             continue
-        elif fold(nxt) in PROPER_NEXT or nxt.startswith("عبد") or nxt_b.startswith("عبد"):
+        elif (fold(nxt) in PROPER_NEXT or fold(nxt_b) in PROPER_NEXT
+                or fold(_strip_al(nxt)) in PROPER_NEXT or fold(_strip_al(nxt_b)) in PROPER_NEXT
+                or nxt.startswith("عبد") or nxt_b.startswith("عبد")):
             yield (a + off, b, None, "إملاء",
                    f"«{w} {nxt}»: إن كان علماً فأبقه، وإن كان حرف جر فصححه إلى «على»", "تنبيه")
         elif prev_b in ALA_GOV or prev in ALA_GOV:
@@ -421,7 +429,7 @@ def rule_number(norm):
         g = plural_gender(noun)
         if g is None:
             yield (m.start(2), m.end(3) if m.group(3) else m.end(2), None, "نحو",
-                   f"«{m.group(2)}{suf} {noun}»: راجع جنس المفرد — العدد يخالف المعدود، ولا إصلاح آلياً لجمع غير معروف", "تنبيه")
+                   f"«{m.group(2)}{suf} {noun}»: جنس المفرد غير معروف — لا إصلاح آلياً، راجع المفرد", "تنبيه")
             continue
         has_ta = suf in ("ة", "ية")
         fem_form, masc_form = NUM_FORMS[root]
