@@ -53,6 +53,8 @@ def _is_presentation(ch):
 
 
 def _nfkc_char(ch, full):
+    if ord(ch) == 0xFDFA:
+        return ch   # ﷺ: صيغة علمية مختصرة، لا تُفكك إلى حروف
     if not (full or _is_presentation(ch)):
         return ch
     o = unicodedata.normalize("NFKC", ch)
@@ -71,7 +73,15 @@ def normalize(text, keep_diac=False, full=True):
     """
     out, idx = [], []
     for i, ch in enumerate(text):
-        if ch in BIDI_CHARS or ch == TATWEEL:
+        if ch in BIDI_CHARS:
+            continue
+        if ch == TATWEEL:
+            # «هـ» علامة السنة الهجرية (٦٤هـ): التطويل هنا جزء من الرمز لا زخرفة
+            prev = text[i - 1] if i > 0 else ""
+            nxt = text[i + 1] if i + 1 < len(text) else ""
+            if prev == "ه" and not re.match(rf"[{AR_LET}\u064B-\u0652\u0670]", nxt):
+                out.append(ch)
+                idx.append(i)
             continue
         for c in _nfkc_char(ch, full):
             if c in BIDI_CHARS or c == TATWEEL:
@@ -237,6 +247,8 @@ GRAMMAR = [
     (r"يؤثر على", "يؤثر في", "حرف الجر الصحيح"),
     (rf"بحاجة ل(?=[{AR}])", "بحاجة إلى", "حرف الجر الصحيح"),
     (r"يتكون على", "يتكون من", "حرف الجر الصحيح"),
+    (r"مفندا", "مفنّداً", "الحال منصوب بالتنوين والشدة"),
+    (r"الأ?موين", None, "«الأموين»: إن قصدت الصفة ف«الأموية» وإن قصدت الجمع ف«الأمويين»"),
 ]
 
 EMOJI_RE = re.compile(
@@ -244,6 +256,8 @@ EMOJI_RE = re.compile(
     "\U00002B00-\U00002BFF\U0000FE0F\U0000200D✅❌✔✖]"
 )
 DASH_RE = re.compile(r"[—–‒―]|--")
+DIGITS = set("0123456789٠١٢٣٤٥٦٧٨٩")
+HR_RE = re.compile(r"^---+\s*$", re.M)
 MD_HEAD = re.compile(r"^\s{0,3}#{1,6}\s", re.M)
 MD_BOLD = re.compile(r"\*\*[^*\n]+\*\*|__[^_\n]+__")
 BULLET = re.compile(r"^\s*([-*•●▪✓✅]|\d+[.)])\s+", re.M)
@@ -305,6 +319,10 @@ PROPER_NEXT = {fold(w) for w in """محمد أحمد خالد سعد فهد عب
 نايف فيصل هند سارة فاطمة نورة مريم ريم لينا سلمى""".split()}
 
 
+# «ثوري/ثورية» بعد اسم علم (سفيان الثوري) نسبة لا بصمة ترجمة.
+THAWRI_OK = PROPER_NEXT | {"سفيان", "ابن", "بن"}
+
+
 def _strip_al(w):
     return w[2:] if w.startswith("ال") and len(w) > 4 else w
 
@@ -337,6 +355,17 @@ def rule_ala(norm):
         elif nxt.startswith("ال") and not nxt.endswith(("ي", "ية")):
             yield (a + off, b, None, "إملاء",
                    f"«{w} {nxt}»: حرف الجر «على» قبل اسم ظاهر، إلا إن كان «علي» اسماً", "تنبيه")
+
+
+# «صراحة» بعد فعل قول (نصت صراحة) بمعنى «بوضوح» لا حشو خطاب.
+SAY_PREV = {fold(w) for w in """نص نصت ذكر ذكرت ورد وردت جاء جاءت ثبت ثبتت
+صرح صرحت أكد أكدت أفاد أفادت قال قالت""".split()}
+
+
+def _prev_words(folded, pos, n=3):
+    toks = [t for t in re.findall(rf"[{AR_LET}٠-٩]+", folded[:pos])
+            if not re.fullmatch(r"[٠-٩0-9]+", t)]
+    return toks[-n:]
 
 
 # أن / إن / ان
@@ -474,6 +503,19 @@ def rule_five_verbs(norm):
                f"«{trig} {word}»: الأفعال الخمسة تُجزم وتُنصب بحذف النون ← «{trig} {right}»", "خطأ")
 
 
+# المثنى المبتدأ المؤخر بعد خبر مقدم (للدولة الأموية شبهتان): مرفوع بالألف لا بالياء.
+# ضيقة عمداً: «شبهتين» وحدها، فالمنصوب الصحيح («استعرض شبهتين») لا يُمس.
+KHABAR_PREPS = set("""عن إلى الى من في على مع ضد حول خلال بين قبل بعد منذ حتى""".split())
+
+
+def rule_dual_nominative(norm):
+    for m in re.finditer(rf"{B}(ل(?:ل)?دول(?:ة|تين)?)\s+([{AR_LET}]+)\s+(شبهتين){E}", norm):
+        if _bare(m.group(2)) in KHABAR_PREPS or m.group(2) in KHABAR_PREPS:
+            continue   # «للدولتين عن شبهتين»: مجرور صحيح بعد حرف جر
+        yield (m.start(3), m.end(3), "شبهتان", "نحو",
+               f"«{m.group(1)} {m.group(2)} شبهتين»: المبتدأ المؤخر مثنى مرفوع ← «شبهتان»", "خطأ")
+
+
 # تنوين الفتح على الهمزة المتطرفة: جزءًا، بناءً. يعمل على النص المشكول.
 def rule_tanween(diac):
     for m in re.finditer(rf"([{AR}])ء([ً-ْ]*)ا([ً]?){E}", diac):
@@ -509,7 +551,20 @@ def rule_hamza_wasl(norm):
                "خطأ")
 
 
-RULES = [rule_spell, rule_ala, rule_anna, rule_number, rule_five_verbs, rule_hamza_wasl]
+# «للعدين/العدين» ← «للعديد/العديد»: ياء «العديد» ساقطة.
+# قاعدة مستقلة لا SPELL: مفتاح SPELL بلا «ال» يلتهم باء «بعدين»، ومفتاحه بها
+# يضاعف اللام إذا سبقته سابقة «لل»، أما المفتاحان الصريحان فآمنان من الجهتين.
+ADEED = {"للعدين": "للعديد", "العدين": "العديد"}
+
+
+def rule_adeed(norm):
+    for m in re.finditer(rf"{B}(للعدين|العدين){E}", norm):
+        w = m.group(1)
+        yield (m.start(1), m.end(1), ADEED[w], "إملاء",
+               f"«{w}» ← «{ADEED[w]}»", "خطأ")
+
+
+RULES = [rule_spell, rule_ala, rule_anna, rule_number, rule_five_verbs, rule_dual_nominative, rule_adeed, rule_hamza_wasl]
 
 
 # ---------------------------------------------------------------- الاختلاق
@@ -680,6 +735,10 @@ def check(text, words_target=None, lines_target=None, source=None, en_lines=True
         for ph in phrases:
             fph = strip_diac(ph).translate(str.maketrans("أإآ", "ااا"))
             for m in find_phrase(folded, fph):
+                if ph in ("ثوري", "ثورية"):
+                    pw = _prev_words(folded, m.start(), 1)
+                    if pw and fold(pw[0]) in THAWRI_OK:
+                        continue   # نسبة إلى علم (سفيان الثوري) لا ترجمة حرفية
                 hits.append((m.start(), m.end(), kind, ph))
     taken = []
     for a0, b0, kind, ph in sorted(hits, key=lambda h: (h[0], -(h[1] - h[0]))):
@@ -699,6 +758,8 @@ def check(text, words_target=None, lines_target=None, source=None, en_lines=True
 
     for adv in SOFT_ADVERBS:
         for m in re.finditer(rf"{B}{adv}{E}", folded):
+            if adv == "صراحة" and any(fold(t) in SAY_PREV for t in _prev_words(folded, m.start())):
+                continue   # «نصت صراحة»: بصراحة النص لا حشو الخطاب
             r.add("تنبيه", "ظرف حشو", f"«{adv}»", norm, m.start(), m.end(),
                   "احذفه إلا إذا حمل معنى")
 
@@ -738,8 +799,20 @@ def check(text, words_target=None, lines_target=None, source=None, en_lines=True
     # 5. زوائد التنسيق (الإيموجي يُفحص في النص الأصلي: رموز الربط جزء منه)
     for m in EMOJI_RE.finditer(text):
         r.add("خطأ", "تنسيق", "إيموجي", text, m.start(), m.end())
+    hr_spans = [(m.start(), m.end()) for m in HR_RE.finditer(norm)]
     for m in DASH_RE.finditer(norm):
+        if any(a <= m.start() < b for a, b in hr_spans):
+            continue   # فاصل أفقي: تنبيه أدناه لا خطأ
+        pa, pb = m.start() - 1, m.end()
+        while pa >= 0 and norm[pa] in " \t":
+            pa -= 1
+        while pb < len(norm) and norm[pb] in " \t":
+            pb += 1
+        if pa >= 0 and pb < len(norm) and norm[pa] in DIGITS and norm[pb] in DIGITS:
+            continue   # مدى رقمي (ص ١٧٣–١٧٤): شرطة مشروعة
         r.add("خطأ", "تنسيق", "شرطة طويلة", norm, m.start(), m.end())
+    for a, b in hr_spans:
+        r.add("تنبيه", "تنسيق", "فاصل أفقي (مقبول في المستندات فقط)", norm, a, b)
     for m in MD_HEAD.finditer(norm):
         r.add("تنبيه", "تنسيق", "ترويسة ماركداون (مقبولة في المستندات فقط)", norm, m.start(), m.end())
     for m in MD_BOLD.finditer(norm):
@@ -833,7 +906,7 @@ def apply_rule_fixes(t):
 def fix(text, en_lines=True):
     t = canon(text)
     t = EMOJI_RE.sub("", t)
-    t = re.sub(r"\s*[—–‒―]\s*|\s+--\s+", "، ", t)
+    t = re.sub(r"(?<![0-9٠-٩])\s*[—–‒―]\s*(?![0-9٠-٩])|(?<![0-9٠-٩])\s+--\s+(?![0-9٠-٩])", "، ", t)
     t = MD_BOLD.sub(lambda m: m.group(0)[2:-2], t)
     t = re.sub(rf"(?<=[{AR}])\s*,\s*", "، ", t)
     t = re.sub(rf"(?<=[{AR}])\s*;\s*", "؛ ", t)
